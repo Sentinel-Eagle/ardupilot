@@ -73,6 +73,7 @@ void ModeTakeoff::update()
     if (!(plane.current_loc.initialised() && AP::ahrs().home_is_set())) {
         plane.calc_nav_roll();
         plane.calc_nav_pitch();
+        /printf("Not init - no throttle %d %d\n", plane.current_loc.initialised() , AP::ahrs().home_is_set());
         SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, 0.0);
         return;
     }
@@ -135,6 +136,7 @@ void ModeTakeoff::update()
     // from starting location in case original yaw used to set it was off due to EKF
     // reset or compass interference from max throttle
     const float altitude_cm = plane.current_loc.alt - start_loc.alt;
+    //printf("STage >> %d %f %d %f\n", plane.is_flying(), altitude_cm, (int) plane.flight_stage, start_loc.get_distance(plane.current_loc));
     if (plane.flight_stage == AP_FixedWing::FlightStage::TAKEOFF &&
         (altitude_cm >= level_alt*100 ||
          start_loc.get_distance(plane.current_loc) >= dist)) {
@@ -148,6 +150,7 @@ void ModeTakeoff::update()
 
     if (plane.flight_stage == AP_FixedWing::FlightStage::TAKEOFF) {
         //below TAKOFF_LVL_ALT
+        //puts("full throttle");
         SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, 100.0);
         plane.takeoff_calc_roll();
         plane.takeoff_calc_pitch();
