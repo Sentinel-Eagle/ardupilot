@@ -73,7 +73,7 @@ void ModeTakeoff::update()
     if (!(plane.current_loc.initialised() && AP::ahrs().home_is_set())) {
         plane.calc_nav_roll();
         plane.calc_nav_pitch();
-        /printf("Not init - no throttle %d %d\n", plane.current_loc.initialised() , AP::ahrs().home_is_set());
+        //printf("Not init - no throttle %d %d\n", plane.current_loc.initialised() , AP::ahrs().home_is_set());
         SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, 0.0);
         return;
     }
