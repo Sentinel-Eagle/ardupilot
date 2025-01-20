@@ -203,7 +203,7 @@ const AP_Param::Info Plane::var_info[] = {
     // @User: Advanced
     GSCALAR(takeoff_flap_percent,     "TKOFF_FLAP_PCNT", 0),
 
-    // @Param: TKOFF_FLAP_PCNT
+    // @Param: TKOFF_NOGPS
     // @DisplayName: Takeoff no GPS
     // @Description: Allow takeoff without GPS
     // @User: Advanced
