@@ -16,6 +16,8 @@ void AP_AHRS::Write_AHRS2() const
     Location loc;
     Quaternion quat;
     if (!get_secondary_attitude(euler) || !get_secondary_position(loc) || !get_secondary_quaternion(quat)) {
+        if (!(_options & uint16_t(Options::LOG_WRITE_STATE_ALWAYS)))
+            return;
         (void)this->get_location(loc);
         (void)this->get_quaternion(quat);
         euler = {-1,-1,-1};
@@ -86,7 +88,11 @@ void AP_AHRS::Write_Origin(LogOriginType origin_type, const Location &loc) const
 void AP_AHRS::Write_POS() const
 {
     Location loc;
-    get_location(loc);
+    bool has_loc = get_location(loc);
+
+    if (!(_options & uint16_t(Options::LOG_WRITE_STATE_ALWAYS)) && !has_loc)
+        return;
+
     float home, origin;
     AP::ahrs().get_relative_position_D_home(home);
     const struct log_POS pkt{

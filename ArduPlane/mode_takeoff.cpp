@@ -73,7 +73,6 @@ void ModeTakeoff::update()
     if (!(plane.current_loc.initialised() && AP::ahrs().home_is_set())) {
         plane.calc_nav_roll();
         plane.calc_nav_pitch();
-        //printf("Not init - no throttle %d %d\n", plane.current_loc.initialised() , AP::ahrs().home_is_set());
         SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, 0.0);
         return;
     }
@@ -135,11 +134,18 @@ void ModeTakeoff::update()
     // reset the loiter waypoint target to be correct bearing and dist
     // from starting location in case original yaw used to set it was off due to EKF
     // reset or compass interference from max throttle
+
     const float altitude_cm = plane.current_loc.alt - start_loc.alt;
-    //printf("STage >> %d %f %d %f\n", plane.is_flying(), altitude_cm, (int) plane.flight_stage, start_loc.get_distance(plane.current_loc));
     if (plane.flight_stage == AP_FixedWing::FlightStage::TAKEOFF &&
         (altitude_cm >= level_alt*100 ||
          start_loc.get_distance(plane.current_loc) >= dist)) {
+        if (plane.g.takeoff_nogps) {
+            gcs().send_text(MAV_SEVERITY_INFO, "Above TKOFF lvl alt & nogps => circle");
+            plane.set_flight_stage(AP_FixedWing::FlightStage::NORMAL);
+            plane.set_mode(Mode::CIRCLE, ModeReason::MISSION_END);
+            return;
+        }
+
         // reset the target loiter waypoint using current yaw which should be close to correct starting heading
         const float direction = start_loc.get_bearing_to(plane.current_loc) * 0.01;
         plane.next_WP_loc = start_loc;
@@ -150,7 +156,6 @@ void ModeTakeoff::update()
 
     if (plane.flight_stage == AP_FixedWing::FlightStage::TAKEOFF) {
         //below TAKOFF_LVL_ALT
-        //puts("full throttle");
         SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, 100.0);
         plane.takeoff_calc_roll();
         plane.takeoff_calc_pitch();
