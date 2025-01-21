@@ -140,9 +140,9 @@ void ModeTakeoff::update()
         bool reached_alt = altitude_cm >= level_alt*100;
         bool reached_dist = start_loc.get_distance(plane.current_loc) >= dist;
         if (plane.g.takeoff_nogps && reached_alt) {
-            gcs().send_text(MAV_SEVERITY_INFO, "Above TKOFF lvl alt & nogps => stab");
+            gcs().send_text(MAV_SEVERITY_INFO, "Above TKOFF lvl alt & nogps => fbwa");
             plane.set_flight_stage(AP_FixedWing::FlightStage::NORMAL);
-            plane.set_mode(Mode::STABILIZE, ModeReason::MISSION_END);
+            plane.set_mode(Mode::FLY_BY_WIRE_A, ModeReason::MISSION_END);
             return;
         } else if (!plane.g.takeoff_nogps && (reached_alt || reached_dist)){
             // reset the target loiter waypoint using current yaw which should be close to correct starting heading
