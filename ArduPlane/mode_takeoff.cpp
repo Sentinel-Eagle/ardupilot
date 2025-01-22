@@ -137,13 +137,15 @@ void ModeTakeoff::update()
 
     const float altitude_cm = plane.current_loc.alt - start_loc.alt;
 
-    if (plane.g.takeoff_nogps && plane.flight_stage == AP_FixedWing::FlightStage::TAKEOFF
-        && altitude_cm >= level_alt*100) {
+    if (plane.g.takeoff_nogps && plane.flight_stage == AP_FixedWing::FlightStage::TAKEOFF &&
+        altitude_cm >= level_alt*100) {
         gcs().send_text(MAV_SEVERITY_INFO, "Above TKOFF lvl alt & nogps => fbwa");
         plane.set_flight_stage(AP_FixedWing::FlightStage::NORMAL);
         plane.set_mode(Mode::FLY_BY_WIRE_A, ModeReason::MISSION_END);
         return;
-    } else if (plane.flight_stage == AP_FixedWing::FlightStage::TAKEOFF &&
+    }
+
+    if (!plane.g.takeoff_nogps && plane.flight_stage == AP_FixedWing::FlightStage::TAKEOFF &&
         (altitude_cm >= level_alt*100 ||
          start_loc.get_distance(plane.current_loc) >= dist)) {
         // reset the target loiter waypoint using current yaw which should be close to correct starting heading
