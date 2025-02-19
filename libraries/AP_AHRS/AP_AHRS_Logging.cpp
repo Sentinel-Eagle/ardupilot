@@ -19,7 +19,8 @@ void AP_AHRS::Write_AHRS2() const
         if (!(_options & uint16_t(Options::LOG_WRITE_STATE_ALWAYS)))
             return;
         (void)this->get_location(loc);
-        (void)this->get_quaternion(quat);
+        bool success = this->get_quaternion(quat);
+        (void)success; 
         euler = {-1,-1,-1};
     }
     const struct log_AHRS pkt{
