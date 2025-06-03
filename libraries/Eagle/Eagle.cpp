@@ -1,4 +1,3 @@
-#include <AP_Math/AP_Math.h>
 #include "Eagle.h"
 
 const AP_Param::GroupInfo Eagle::var_info[] = {
