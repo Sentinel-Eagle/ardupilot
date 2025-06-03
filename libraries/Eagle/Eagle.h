@@ -7,8 +7,8 @@
 #include <AP_Param/AP_Param.h>
 
 // Add this class to classes that would like to expose it's parameters.
-// Example of this is in AP_Vehicle - ArduPlane, ArduSub and ArduCopter inherit
-// from it and thus also get access to this object.
+// Example of this is in ArduCopter.
+// It's important to add this library as a dependency in sth like wscript.
 
 /// @class  Eagle
 /// @brief  Eagle
