@@ -462,6 +462,7 @@ protected:
     AP_Scripting scripting;
 #endif
     static const struct AP_Param::GroupInfo var_info[];
+
 #if AP_SCHEDULER_ENABLED
     static const struct AP_Scheduler::Task scheduler_tasks[];
 #endif
