@@ -1,0 +1,40 @@
+#pragma once
+
+/// @file   Eagle.h
+/// @brief  Eagle
+
+#include <AP_Common/AP_Common.h>
+#include <AP_Param/AP_Param.h>
+
+/// @class  Eagle
+/// @brief  Eagle
+class Eagle{
+public:
+    Eagle() {
+        // setup parameter defaults
+        AP_Param::setup_object_defaults(this, var_info);
+    }
+
+    /* Do not allow copies */
+    CLASS_NO_COPY(Eagle);
+
+    static const struct AP_Param::GroupInfo        var_info[];
+
+private:
+    AP_Float _f0;
+    AP_Float _f1;
+    AP_Float _f2;
+    AP_Float _f3;
+    AP_Float _f4;
+    AP_Float _f5;
+    AP_Float _f6;
+    AP_Float _f7;
+    AP_Float _f8;
+    AP_Float _f9;
+    AP_Int32 _i0;
+    AP_Int32 _i1;
+    AP_Int32 _i2;
+    AP_Int32 _i3;
+    AP_Int32 _i4;
+    AP_Int32 _i5;
+};

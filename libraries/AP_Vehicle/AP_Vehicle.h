@@ -80,6 +80,8 @@
 #include <AP_Gripper/AP_Gripper.h>
 #endif
 
+#include <Eagle/Eagle.h>
+
 class AP_DDS_Client;
 
 class AP_Vehicle : public AP_HAL::HAL::Callbacks {
@@ -461,6 +463,8 @@ protected:
 #if AP_SCRIPTING_ENABLED
     AP_Scripting scripting;
 #endif
+
+    Eagle eagle;
 
     static const struct AP_Param::GroupInfo var_info[];
 #if AP_SCHEDULER_ENABLED
