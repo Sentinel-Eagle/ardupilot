@@ -6,6 +6,10 @@
 #include <AP_Common/AP_Common.h>
 #include <AP_Param/AP_Param.h>
 
+// Add this class to classes that would like to expose it's parameters.
+// Example of this is in AP_Vehicle - ArduPlane, ArduSub and ArduCopter inherit
+// from it and thus also get access to this object.
+
 /// @class  Eagle
 /// @brief  Eagle
 class Eagle{
@@ -21,6 +25,11 @@ public:
     static const struct AP_Param::GroupInfo        var_info[];
 
 private:
+    // Useful for adding new parameters:
+    // https://ardupilot.org/dev/docs/code-overview-adding-a-new-parameter.html#adding-a-parameter-to-a-library
+
+    // Tested that 64 parameters fit with idx in range 0-63 (more parameters cause quiet runtime errors)
+
     AP_Float _f0;
     AP_Float _f1;
     AP_Float _f2;
