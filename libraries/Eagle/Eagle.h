@@ -6,7 +6,7 @@
 #include <AP_Common/AP_Common.h>
 #include <AP_Param/AP_Param.h>
 
-// Add this class to classes that would like to expose it's parameters.
+// Add this class as a variable to classes that would like to expose its parameters.
 // Example of this is in ArduCopter.
 // It's important to add this library as a dependency in sth like wscript.
 
