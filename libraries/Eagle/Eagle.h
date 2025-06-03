@@ -15,7 +15,6 @@
 class Eagle{
 public:
     Eagle() {
-        // setup parameter defaults
         AP_Param::setup_object_defaults(this, var_info);
     }
 
