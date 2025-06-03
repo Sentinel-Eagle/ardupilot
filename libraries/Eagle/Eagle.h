@@ -8,7 +8,7 @@
 
 // Add this class as a variable to classes that would like to expose its parameters.
 // Example of this is in ArduCopter.
-// It's important to add this library as a dependency in sth like wscript.
+// It's important to add this library as a dependency in `wscript`.
 
 /// @class  Eagle
 /// @brief  Eagle
