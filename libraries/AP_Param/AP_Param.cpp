@@ -1206,7 +1206,8 @@ void AP_Param::save_sync(bool force_save, bool send_to_gcs)
         }
         if (is_equal(v1,v2) && !force_save) {
             if (send_to_gcs) {
-                GCS_SEND_PARAM(name, (enum ap_var_type)info->type, v2);
+                printf("SEND PARAM XOXO %s %d %d\n", name, info->type, phdr.type);
+                GCS_SEND_PARAM(name, (enum ap_var_type)phdr.type, v2);
             }
             return;
         }

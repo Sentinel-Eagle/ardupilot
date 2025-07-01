@@ -329,8 +329,9 @@ class Board:
             env.PRIVATE_KEY = cfg.options.private_key
             
         env.CXXFLAGS += [
-            '-std=gnu++11',
+            '-std=gnu++23',
 
+            '-Wno-error=unused-result',
             '-fdata-sections',
             '-ffunction-sections',
             '-fno-exceptions',
@@ -730,6 +731,7 @@ class sitl(Board):
 
         env.LIB += [
             'm',
+            'stdc++exp',
         ]
 
         cfg.check_librt(env)

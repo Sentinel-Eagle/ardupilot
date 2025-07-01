@@ -650,8 +650,12 @@ void AC_PosControl::update_xy_controller()
 
     // add velocity feed-forward scaled to compensate for optical flow measurement induced EKF noise
     vel_target *= ahrsControlScaleXY;
+    if (0){
     _vel_target.xy() = vel_target;
     _vel_target.xy() += _vel_desired.xy();
+    }else{
+    _vel_target.xy() = _vel_desired.xy();
+    }
 
     // Velocity Controller
 

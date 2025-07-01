@@ -105,6 +105,7 @@ void AP_Scheduler::init(const AP_Scheduler::Task *tasks, uint8_t num_tasks, uint
     // grab the semaphore before we start anything
     _rsem.take_blocking();
 
+    printf("INIT loop >>>%d %d\n", (int)_loop_rate_hz, SCHEDULER_DEFAULT_LOOP_RATE);
     // only allow 50 to 2000 Hz
     if (_loop_rate_hz < 50) {
         _loop_rate_hz.set(50);

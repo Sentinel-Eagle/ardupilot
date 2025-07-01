@@ -17,6 +17,7 @@
 #include "AP_GPS_config.h"
 
 #if AP_GPS_ENABLED
+#include <cstdio>
 
 #include <AP_HAL/AP_HAL.h>
 #include <inttypes.h>
@@ -153,6 +154,7 @@ public:
         GPS_OK_FIX_3D_DGPS = 4,      ///< Receiving valid messages and 3D lock with differential improvements
         GPS_OK_FIX_3D_RTK_FLOAT = 5, ///< Receiving valid messages and 3D RTK Float
         GPS_OK_FIX_3D_RTK_FIXED = 6, ///< Receiving valid messages and 3D RTK Fixed
+        GPS_ENUM_END = 7, 
     };
 
     // GPS navigation engine settings. Not all GPS receivers support
@@ -284,12 +286,17 @@ public:
 
     /// Query GPS status
     GPS_Status status(uint8_t instance) const {
+        if (_ovrd_status != AP_GPS::GPS_ENUM_END)
+            return (GPS_Status)_ovrd_status.get();
         if (_force_disable_gps && state[instance].status > NO_FIX) {
             return NO_FIX;
         }
         return state[instance].status;
     }
     GPS_Status status(void) const {
+        if (_ovrd_status != AP_GPS::GPS_ENUM_END)
+            return (GPS_Status)_ovrd_status.get();
+
         return status(primary_instance);
     }
 
@@ -311,6 +318,8 @@ public:
             return '5';
         case AP_GPS::GPS_OK_FIX_3D_RTK_FIXED:
             return '6';
+        case AP_GPS::GPS_ENUM_END:
+            return '$';
         }
         // should never reach here; compiler flags guarantees this.
         return '?';
@@ -321,9 +330,19 @@ public:
 
     // location of last fix
     const Location &location(uint8_t instance) const {
+        if (_ovrd_enable)
+        {
+            _ovrd_location = Location(_ovrd_lat, _ovrd_lng, _ovrd_alt, Location::AltFrame::ABSOLUTE);
+            return _ovrd_location;
+        }
         return state[instance].location;
     }
     const Location &location() const {
+        if (_ovrd_enable)
+        {
+            _ovrd_location = Location(_ovrd_lat, _ovrd_lng, _ovrd_alt, Location::AltFrame::ABSOLUTE);
+            return _ovrd_location;
+        }
         return location(primary_instance);
     }
 
@@ -620,6 +639,13 @@ protected:
     AP_Int8 _blend_mask;
     AP_Int16 _driver_options;
     AP_Int8 _primary;
+
+    AP_Int8 _ovrd_enable;
+    AP_Int8 _ovrd_status;
+    AP_Int32 _ovrd_lng;
+    AP_Int32 _ovrd_lat;
+    AP_Int32 _ovrd_alt;
+    mutable Location _ovrd_location;
 
     uint32_t _log_gps_bit = -1;
 

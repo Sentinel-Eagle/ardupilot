@@ -600,6 +600,7 @@ void SITL_State::_parse_command_line(int argc, char * const argv[])
     if (AP::sitl()) {
         // Set SITL start time.
         AP::sitl()->start_time_UTC = start_time_UTC;
+        puts("aaa");
     }
 
     hal.set_storage_posix_enabled(storage_posix_enabled);

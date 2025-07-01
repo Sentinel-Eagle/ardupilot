@@ -19,6 +19,7 @@
  *
  */
 
+#define puts(x) GCS_SEND_TEXT(MAV_SEVERITY_WARNING, x);
 #include "AP_AHRS_config.h"
 
 #if AP_AHRS_ENABLED
@@ -2896,9 +2897,11 @@ bool AP_AHRS::set_home(const Location &loc)
     WITH_SEMAPHORE(_rsem);
     // check location is valid
     if (loc.lat == 0 && loc.lng == 0 && loc.alt == 0) {
+        //puts("Set home empty loc");
         return false;
     }
     if (!loc.check_latlng()) {
+        //puts("Set home invalid latlon");
         return false;
     }
     // home must always be global frame at the moment as .alt is
@@ -2906,6 +2909,7 @@ bool AP_AHRS::set_home(const Location &loc)
     // in checking the frame type.
     Location tmp = loc;
     if (!tmp.change_alt_frame(Location::AltFrame::ABSOLUTE)) {
+        //puts("Set home bad frame");
         return false;
     }
 

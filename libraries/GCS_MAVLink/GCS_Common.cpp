@@ -114,7 +114,7 @@ extern AP_IOMCU iomcu;
 
 extern const AP_HAL::HAL& hal;
 
-struct GCS_MAVLINK::LastRadioStatus GCS_MAVLINK::last_radio_status;
+struct GCS_MAVLINK::LastRadioStatus GCS_MAVLINK::global_last_radio_status;
 uint8_t GCS_MAVLINK::mavlink_active = 0;
 uint8_t GCS_MAVLINK::chan_is_streaming = 0;
 uint32_t GCS_MAVLINK::reserve_param_space_start_ms;
@@ -822,15 +822,15 @@ void GCS_MAVLINK::send_text(MAV_SEVERITY severity, const char *fmt, ...) const
 
 float GCS_MAVLINK::telemetry_radio_rssi()
 {
-    if (AP_HAL::millis() - last_radio_status.received_ms > 5000) {
+    if (AP_HAL::millis() - global_last_radio_status.received_ms > 5000) {
         // telemetry radio has disappeared?!
         return 0;
     }
-    if (last_radio_status.rssi == 255) {
+    if (global_last_radio_status.rssi == 255) {
         // see RADIO_STATUS packet definition
         return 0;
     }
-    return last_radio_status.rssi/254.0f;
+    return global_last_radio_status.rssi/254.0f;
 }
 
 bool GCS_MAVLINK::last_txbuf_is_greater(uint8_t txbuf_limit)
@@ -859,6 +859,7 @@ void GCS_MAVLINK::handle_radio_status(const mavlink_message_t &msg)
     }
 
     last_radio_status.txbuf = packet.txbuf;
+    global_last_radio_status = last_radio_status;
 
     // use the state of the transmit buffer in the radio to
     // control the stream rate, giving us adaptive software
@@ -3520,9 +3521,9 @@ void GCS_MAVLINK::handle_statustext(const mavlink_message_t &msg) const
     }
 
     memcpy(&text[offset], packet.text, MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN);
-    bool use_prefix = packet.severity != MAV_SEVERITY_ENUM_END;
+    //bool use_prefix = packet.severity != MAV_SEVERITY_ENUM_END;
 
-    send_text((MAV_SEVERITY)packet.severity, "%s", text + (use_prefix? 0: offset));
+    //send_text((MAV_SEVERITY)packet.severity, "%s", text + (use_prefix? 0: offset));
 
     logger->Write_Message(text);
 #endif
@@ -6870,7 +6871,7 @@ void GCS_MAVLINK::manual_override(RC_Channel *c, int16_t value_in, const uint16_
 
 void GCS_MAVLINK::handle_manual_control(const mavlink_message_t &msg)
 {
-    if (msg.sysid != sysid_my_gcs()) {
+    if (msg.sysid != sysid_my_gcs() && msg.sysid != gcs().sysid_this_mav()) {
         return; // only accept control from our gcs
     }
 

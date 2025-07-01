@@ -252,6 +252,7 @@ bool Copter::set_mode(Mode::Number mode, ModeReason reason)
 {
     // update last reason
     const ModeReason last_reason = _last_reason;
+    printf("Set mode %d %d\n", mode, reason);
     _last_reason = reason;
 
     // return immediately if we are already in the desired mode

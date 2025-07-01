@@ -651,6 +651,7 @@ static const ap_message STREAM_EXTRA1_msgs[] = {
     MSG_ATTITUDE,
 #if AP_SIM_ENABLED
     MSG_SIMSTATE,
+    MSG_SIM_STATE,
 #endif
     MSG_AHRS2,
 #if AP_RPM_ENABLED

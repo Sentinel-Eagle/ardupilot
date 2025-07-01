@@ -7,11 +7,45 @@
 
 #include <AC_AttitudeControl/AC_AttitudeControl.h>
 #include <AC_AttitudeControl/AC_PosControl.h>
+#include <AP_GPS/AP_GPS.h>
 
 
 // Write an AHRS2 packet
 void AP_AHRS::Write_AHRS2() const
 {
+    {
+    const struct log_AHRV pkt{
+        LOG_PACKET_HEADER_INIT(LOG_AHRV_MSG),
+        time_us : AP_HAL::micros64(),
+        airspeed: state.airspeed,
+        wind_x: state.wind_estimate.x,
+        wind_y: state.wind_estimate.y,
+        wind_z: state.wind_estimate.z,
+        vned_x: state.velocity_NED.x,
+        vned_y: state.velocity_NED.y,
+        vned_z: state.velocity_NED.z,
+    };
+    AP::logger().WriteBlock(&pkt, sizeof(pkt));
+    }
+
+    {
+    const struct log_AHR3 pkt{
+        LOG_PACKET_HEADER_INIT(LOG_AHR3_MSG),
+        time_us : AP_HAL::micros64(),
+        airspeed_estimate_type: state.airspeed_estimate_type,
+        wind_estimate_ok: state.wind_estimate_ok,
+        active_ekf: (uint8_t)state.active_EKF,
+        quat_ok: state.quat_ok,
+        secondary_attitude_ok: state.secondary_attitude_ok,
+        secondary_quat_ok: state.secondary_quat_ok,
+        location_ok: state.location_ok,
+        vned_ok: state.velocity_NED_ok,
+        gps_status: (uint8_t)AP_GPS::get_singleton()->status(),
+    };
+    AP::logger().WriteBlock(&pkt, sizeof(pkt));
+
+    }
+
     Vector3f euler;
     Location loc;
     Quaternion quat;
@@ -19,8 +53,7 @@ void AP_AHRS::Write_AHRS2() const
         if (!(_options & uint16_t(Options::LOG_WRITE_STATE_ALWAYS)))
             return;
         (void)this->get_location(loc);
-        bool success = this->get_quaternion(quat);
-        (void)success; 
+        [[maybe_unused]]auto  success = this->get_quaternion(quat);
         euler = {-1,-1,-1};
     }
     const struct log_AHRS pkt{

@@ -1118,6 +1118,8 @@ void AP_DroneCAN::gnss_send_fix()
         pkt.mode = UAVCAN_EQUIPMENT_GNSS_FIX2_MODE_RTK;
         pkt.sub_mode = UAVCAN_EQUIPMENT_GNSS_FIX2_SUB_MODE_RTK_FIXED;
         break;
+    default:
+        assert(0);
     }
 
     pkt.covariance.len = 6;

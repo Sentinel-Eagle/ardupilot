@@ -1,5 +1,7 @@
 #include "Copter.h"
 
+#define puts(x) GCS_SEND_TEXT(MAV_SEVERITY_WARNING, x);
+
 // checks if we should update ahrs/RTL home position from the EKF
 void Copter::update_home_from_EKF()
 {
@@ -50,6 +52,7 @@ bool Copter::set_home_to_current_location(bool lock) {
 #endif
         return true;
     }
+    //puts("failed to get current loc - set home fail");
     return false;
 }
 
@@ -60,6 +63,7 @@ bool Copter::set_home(const Location& loc, bool lock)
     // check EKF origin has been set
     Location ekf_origin;
     if (!ahrs.get_origin(ekf_origin)) {
+        //puts("set home no ekf origin");
         return false;
     }
 

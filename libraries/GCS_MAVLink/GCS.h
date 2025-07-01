@@ -316,10 +316,10 @@ public:
     uint32_t        last_heartbeat_time; // milliseconds
 
     static uint32_t last_radio_status_remrssi_ms() {
-        return last_radio_status.remrssi_ms;
+        return global_last_radio_status.remrssi_ms;
     }
     static float telemetry_radio_rssi(); // 0==no signal, 1==full signal
-    static bool last_txbuf_is_greater(uint8_t txbuf_limit);
+    bool last_txbuf_is_greater(uint8_t txbuf_limit);
 
     // mission item index to be sent on queued msg, delayed or not
     uint16_t mission_item_reached_index = AP_MISSION_CMD_INDEX_NONE;
@@ -766,12 +766,13 @@ private:
     const AP_SerialManager::UARTState *uartstate;
 
     // last time we got a non-zero RSSI from RADIO_STATUS
-    static struct LastRadioStatus {
+    struct LastRadioStatus {
         uint32_t remrssi_ms;
         uint8_t rssi;
         uint32_t received_ms; // time RADIO_STATUS received
         uint8_t txbuf = 100;
     } last_radio_status;
+    static LastRadioStatus global_last_radio_status;
 
     enum class Flags {
         USING_SIGNING = (1<<0),

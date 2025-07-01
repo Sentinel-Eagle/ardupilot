@@ -87,6 +87,7 @@ GCS_MAVLINK::queued_param_send()
             _queued_parameter_count,
             _queued_parameter_index);
 
+        count--;
         _queued_parameter = AP_Param::next_scalar(&_queued_parameter_token, &_queued_parameter_type);
         _queued_parameter_index++;
 
@@ -94,7 +95,6 @@ GCS_MAVLINK::queued_param_send()
             // don't use more than 1ms sending blocks of parameters
             break;
         }
-        count--;
     }
     _queued_parameter_send_time_ms = tnow;
 }

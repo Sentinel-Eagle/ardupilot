@@ -51,6 +51,7 @@ bool ModeGuided::init(bool ignore_checks)
 // should be called at 100hz or more
 void ModeGuided::run()
 {
+
     // run pause control if the vehicle is paused
     if (_paused) {
         pause_control_run();

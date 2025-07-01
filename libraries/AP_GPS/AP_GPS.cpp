@@ -274,6 +274,13 @@ const AP_Param::GroupInfo AP_GPS::var_info[] = {
     AP_SUBGROUPINFO(params[1], "2_", 33, AP_GPS, AP_GPS::Params),
 #endif
 
+    AP_GROUPINFO("_OVRD_ENABLE", 34, AP_GPS, _ovrd_enable, 0),
+
+    AP_GROUPINFO("_OVRD_STATUS", 35, AP_GPS, _ovrd_status, AP_GPS::GPS_ENUM_END),
+    AP_GROUPINFO("_OVRD_LAT", 36, AP_GPS, _ovrd_lat, 0),
+    AP_GROUPINFO("_OVRD_LNG", 37, AP_GPS, _ovrd_lng, 0),
+    AP_GROUPINFO("_OVRD_ALT", 38, AP_GPS, _ovrd_alt, 0),
+
     AP_GROUPEND
 };
 

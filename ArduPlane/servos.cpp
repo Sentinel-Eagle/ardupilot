@@ -187,6 +187,10 @@ void Plane::channel_function_mixer(SRV_Channel::Aux_servo_function_t func1_in, S
     
     float out1 = constrain_float((in2 - in1) * g.mixing_gain, -4500, 4500);
     float out2 = constrain_float((in2 + in1) * g.mixing_gain, -4500, 4500);
+    if (func1_in == 4)
+    {
+    //printf("MIXER : in=%+3.4f %+3.4f, out=%+3.4f %+3.4f %d %d %d %d\n", in1, in2, out1, out2, func1_in , func2_in, func1_out, func2_out);
+    }
     SRV_Channels::set_output_scaled(func1_out, out1);
     SRV_Channels::set_output_scaled(func2_out, out2);
 }

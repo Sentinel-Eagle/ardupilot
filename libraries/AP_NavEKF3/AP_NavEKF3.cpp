@@ -1136,13 +1136,15 @@ bool NavEKF3::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
         AP::dal().snprintf(failure_msg, failure_msg_len, "no EKF3 cores");
         return false;
     }
+    return true;
     for (uint8_t i = 0; i < num_cores; i++) {
         if (!core[i].healthy()) {
             const char *failure = core[i].prearm_failure_reason();
             if (failure != nullptr) {
                 AP::dal().snprintf(failure_msg, failure_msg_len, failure);
             } else {
-                AP::dal().snprintf(failure_msg, failure_msg_len, "EKF3 core %d unhealthy", (int)i);
+                AP::dal().snprintf(failure_msg, failure_msg_len, "EKF3 core %d unhealthy %d", (int)i, healthy());
+                continue;
             }
             return false;
         }

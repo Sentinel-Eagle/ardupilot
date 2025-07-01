@@ -251,6 +251,10 @@ class VehicleInfo(object):
     "ArduPlane": {
         "default_frame": "plane",
         "frames": {
+"gazebo-quadplane": {
+    "waf_target": "bin/arduplane",
+    "default_params_filename": "default_params/gazebo_quadplane.parm",
+},
             # PLANE
             "quadplane-tilttri": {
                 "waf_target": "bin/arduplane",

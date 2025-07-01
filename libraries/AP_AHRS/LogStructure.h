@@ -4,6 +4,8 @@
 
 #define LOG_IDS_FROM_AHRS \
     LOG_AHR2_MSG, \
+    LOG_AHRV_MSG, \
+    LOG_AHR3_MSG, \
     LOG_AOA_SSA_MSG, \
     LOG_ATTITUDE_MSG, \
     LOG_ORGN_MSG, \
@@ -35,6 +37,64 @@ struct PACKED log_AHRS {
     int32_t lng;
     float q1, q2, q3, q4;
 };
+
+// @LoggerMessage: AHR3
+// @Description: Backup AHRS data
+// @Field: TimeUS: Time since system startup
+// @Field: Roll: Estimated roll
+// @Field: Pitch: Estimated pitch
+// @Field: Yaw: Estimated yaw
+// @Field: Alt: Estimated altitude
+// @Field: Lat: Estimated latitude
+// @Field: Lng: Estimated longitude
+// @Field: Q1: Estimated attitude quaternion component 1
+// @Field: Q2: Estimated attitude quaternion component 2
+// @Field: Q3: Estimated attitude quaternion component 3
+// @Field: Q4: Estimated attitude quaternion component 4
+struct PACKED log_AHRV {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    float airspeed;
+
+    float wind_x;
+    float wind_y;
+    float wind_z;
+
+    float vned_x;
+    float vned_y;
+    float vned_z;
+};
+
+// @LoggerMessage: AHR3
+// @Description: Backup AHRS data
+// @Field: TimeUS: Time since system startup
+// @Field: Roll: Estimated roll
+// @Field: Pitch: Estimated pitch
+// @Field: Yaw: Estimated yaw
+// @Field: Alt: Estimated altitude
+// @Field: Lat: Estimated latitude
+// @Field: Lng: Estimated longitude
+// @Field: Q1: Estimated attitude quaternion component 1
+// @Field: Q2: Estimated attitude quaternion component 2
+// @Field: Q3: Estimated attitude quaternion component 3
+// @Field: Q4: Estimated attitude quaternion component 4
+struct PACKED log_AHR3 {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+
+    uint8_t airspeed_estimate_type;
+    uint8_t wind_estimate_ok;
+
+
+    uint8_t active_ekf;
+    uint8_t quat_ok;
+    uint8_t secondary_attitude_ok;
+    uint8_t secondary_quat_ok;
+    uint8_t location_ok;
+    uint8_t vned_ok;
+    uint8_t gps_status;
+};
+
 
 // @LoggerMessage: AOA
 // @Description: Angle of attack and Side Slip Angle values
@@ -196,6 +256,10 @@ struct PACKED log_ATSC {
 #define LOG_STRUCTURE_FROM_AHRS \
     { LOG_AHR2_MSG, sizeof(log_AHRS), \
         "AHR2","QccCfLLffff","TimeUS,Roll,Pitch,Yaw,Alt,Lat,Lng,Q1,Q2,Q3,Q4","sddhmDU----", "FBBB0GG----" , true }, \
+    { LOG_AHRV_MSG, sizeof(log_AHRV), \
+        "AHRV","Qfffffff","TimeUS,air,wx,wy,wz,vx,vy,vz", "snnnnnnn", "F???????" , true }, \
+    { LOG_AHR3_MSG, sizeof(log_AHR3), \
+        "AHR3","Qbbbbbbbbb","TimeUS,air_t,wok,ekf,quatok,quat2ok,att2ok,locok,vok,gpsok", "s---------", "F---------" , true }, \
     { LOG_AOA_SSA_MSG, sizeof(log_AOA_SSA), \
         "AOA", "Qff", "TimeUS,AOA,SSA", "sdd", "F00" , true }, \
     { LOG_ATTITUDE_MSG, sizeof(log_Attitude),\

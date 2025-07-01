@@ -19,7 +19,8 @@ bool ModeGuidedNoGPS::init(bool ignore_checks)
 void ModeGuidedNoGPS::run()
 {
     // run angle controller
-    ModeGuided::angle_control_run();
+    //ModeGuided::angle_control_run();
+    ModeGuided::run();
 }
 
 #endif

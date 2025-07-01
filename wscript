@@ -131,7 +131,7 @@ def init(ctx):
     _set_build_context_variant(board)
 
 def options(opt):
-    opt.load('compiler_cxx compiler_c waf_unit_test python')
+    opt.load('compiler_cxx compiler_c waf_unit_test python clang_compilation_database')
     opt.load('ardupilotwaf')
     opt.load('build_summary')
 
