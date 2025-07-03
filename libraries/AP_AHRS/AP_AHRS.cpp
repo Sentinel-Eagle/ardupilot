@@ -19,7 +19,6 @@
  *
  */
 
-#define puts(x) GCS_SEND_TEXT(MAV_SEVERITY_WARNING, x);
 #include "AP_AHRS_config.h"
 
 #if AP_AHRS_ENABLED
@@ -43,6 +42,7 @@
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
 #include <SITL/SITL.h>
 #endif
+#define puts(x) GCS_SEND_TEXT(MAV_SEVERITY_WARNING, x);
 
 #define ATTITUDE_CHECK_THRESH_ROLL_PITCH_RAD radians(10)
 #define ATTITUDE_CHECK_THRESH_YAW_RAD radians(20)

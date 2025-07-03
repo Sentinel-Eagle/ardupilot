@@ -731,7 +731,6 @@ class sitl(Board):
 
         env.LIB += [
             'm',
-            'stdc++exp',
         ]
 
         cfg.check_librt(env)

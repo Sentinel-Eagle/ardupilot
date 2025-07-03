@@ -839,7 +839,7 @@ void UARTDriver::handle_writing_from_writebuffer_to_device()
         uint16_t n = _writebuffer.available();
         n = MIN(n, max_bytes);
 #if HAL_GCS_ENABLED
-        if (0 && n > 0) {
+        if (n > 0) {
             n = mavlink_packetise(_writebuffer, n);
         }
 #endif
