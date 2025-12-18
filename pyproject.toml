@@ -1,7 +1,11 @@
+[project]
+name = "ardupilot"
+version = "0.1.0"
+dependencies = []
+
 [tool.isort]
 profile = "black"
 skip = ["./modules/", "./build/"]
-dependencies = []
 
 [tool.black]
 line-length = 120
