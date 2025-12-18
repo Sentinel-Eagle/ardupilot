@@ -1,10 +1,14 @@
 [tool.isort]
 profile = "black"
 skip = ["./modules/", "./build/"]
+dependencies = []
 
 [tool.black]
 line-length = 120
 skip-string-normalization = true
+
+[tool.eagle]
+local-dependencies = []
 
 [tool.mypy]
 ignore_missing_imports = true
