@@ -249,6 +249,7 @@ void NavEKF3_core::setAidingMode()
         onGround &&
         PV_AidingMode != AID_NONE)
     {
+        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "EKF2 IMU%u has stopped aiding",(unsigned)imu_index);
         PV_AidingMode = AID_NONE;
         yawAlignComplete = false;
         yawAlignGpsValidCount = 0;
