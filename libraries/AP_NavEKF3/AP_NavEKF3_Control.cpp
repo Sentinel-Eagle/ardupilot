@@ -247,10 +247,9 @@ void NavEKF3_core::setAidingMode()
     if (yaw_source_last == AP_NavEKF_Source::SourceYaw::NONE &&
         !motorsArmed &&
         onGround &&
-        false &&
+        false && // SENTINEL-EAGLE CHANGE
         PV_AidingMode != AID_NONE)
     {
-        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "EAGLE SPECIAL CASE");
         PV_AidingMode = AID_NONE;
         yawAlignComplete = false;
         yawAlignGpsValidCount = 0;
