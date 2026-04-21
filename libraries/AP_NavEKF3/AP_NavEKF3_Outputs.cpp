@@ -66,7 +66,7 @@ float NavEKF3_core::errorScore() const
 bool NavEKF3_core::getHeightControlLimit(float &height) const
 {
     // only ask for limiting if we are doing optical flow navigation
-    if (frontend->sources.useVelXYSource(AP_NavEKF_Source::SourceXY::OPTFLOW) && (PV_AidingMode == AID_RELATIVE) && flowDataValid) {
+    if (uses_velxy_source(AP_NavEKF_Source::SourceXY::OPTFLOW) && (PV_AidingMode == AID_RELATIVE) && flowDataValid) {
         // If are doing optical flow nav, ensure the height above ground is within range finder limits after accounting for vehicle tilt and control errors
         const auto *_rng = dal.rangefinder();
         if (_rng == nullptr) {
@@ -75,7 +75,7 @@ bool NavEKF3_core::getHeightControlLimit(float &height) const
         }
         height = MAX(float(_rng->max_distance_cm_orient(ROTATION_PITCH_270)) * 0.007f - 1.0f, 1.0f);
         // If we are are not using the range finder as the height reference, then compensate for the difference between terrain and EKF origin
-        if (frontend->sources.getPosZSource() != AP_NavEKF_Source::SourceZ::RANGEFINDER) {
+        if (!uses_posz_source(AP_NavEKF_Source::SourceZ::RANGEFINDER)) {
             height -= terrainState;
         }
         return true;
@@ -223,7 +223,7 @@ bool NavEKF3_core::getPosNE(Vector2f &posNE) const
     if (PV_AidingMode != AID_NONE) {
         // This is the normal mode of operation where we can use the EKF position states
         // correct for the IMU offset (EKF calculations are at the IMU)
-        posNE = (outputDataNew.position.xy() + posOffsetNED.xy() + public_origin.get_distance_NE_ftype(EKF_origin)).tofloat();
+        posNE = (outputDataNew.position.xy() + posOffsetNED.xy()).tofloat();
         return true;
 
     } else {
@@ -233,7 +233,7 @@ bool NavEKF3_core::getPosNE(Vector2f &posNE) const
             if ((gps.status(selected_gps) >= AP_DAL_GPS::GPS_OK_FIX_2D)) {
                 // If the origin has been set and we have GPS, then return the GPS position relative to the origin
                 const Location &gpsloc = gps.location(selected_gps);
-                posNE = public_origin.get_distance_NE_ftype(gpsloc).tofloat();
+                posNE = EKF_origin.get_distance_NE_ftype(gpsloc).tofloat();
                 return false;
 #if EK3_FEATURE_BEACON_FUSION
             } else if (rngBcn.alignmentStarted) {
@@ -267,19 +267,11 @@ bool NavEKF3_core::getPosD_local(float &posD) const
 
 }
 
-// Write the last calculated D position of the body frame origin relative to the public origin
+// Write the last calculated D position of the body frame origin relative to the lane-local origin
 // Return true if the estimate is valid
 bool NavEKF3_core::getPosD(float &posD) const
 {
-    bool ret = getPosD_local(posD);
-
-    // adjust posD for difference between our origin and the public_origin
-    Location local_origin;
-    if (getOriginLLH(local_origin)) {
-        posD += (public_origin.alt - local_origin.alt) * 0.01;
-    }
-
-    return ret;
+    return getPosD_local(posD);
 }
 
 // return the estimated height of body frame origin above ground level
@@ -377,7 +369,7 @@ void NavEKF3_core::getEkfControlLimits(float &ekfGndSpdLimit, float &ekfNavVelGa
 bool NavEKF3_core::getOriginLLH(Location &loc) const
 {
     if (validOrigin) {
-        loc = public_origin;
+        loc = EKF_origin;
         // report internally corrected reference height if enabled
         if ((frontend->_originHgtMode & (1<<2)) == 0) {
             loc.alt = (int32_t)(100.0f * (float)ekfGpsRefHgt);

@@ -54,7 +54,7 @@ void NavEKF3_core::SelectFlowFusion()
 
     // Fuse optical flow data into the main filter
     if (flowDataToFuse && tiltOK) {
-        const bool fuse_optflow = (frontend->_flowUse == FLOW_USE_NAV) && frontend->sources.useVelXYSource(AP_NavEKF_Source::SourceXY::OPTFLOW);
+        const bool fuse_optflow = (frontend->_flowUse == FLOW_USE_NAV) && uses_velxy_source(AP_NavEKF_Source::SourceXY::OPTFLOW);
         // Set the flow noise used by the fusion processes
         R_LOS = sq(MAX(frontend->_flowNoise, 0.05f));
         // Fuse the optical flow X and Y axis data into the main filter sequentially
@@ -778,4 +778,3 @@ bool NavEKF3_core::getOptFlowSample(uint32_t& timestamp_ms, Vector2f& flowRate, 
 /********************************************************
 *                   MISC FUNCTIONS                      *
 ********************************************************/
-

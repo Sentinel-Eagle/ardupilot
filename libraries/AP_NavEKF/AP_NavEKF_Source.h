@@ -54,29 +54,34 @@ public:
     void init();
 
     // get current position source
-    SourceXY getPosXYSource() const { return _source_set[active_source_set].posxy; }
+    SourceXY getPosXYSource() const { return getPosXYSource(active_source_set); }
+    SourceXY getPosXYSource(uint8_t source_set_idx) const;
     SourceZ getPosZSource() const;
+    SourceZ getPosZSource(uint8_t source_set_idx) const;
 
     // set position, velocity and yaw sources to either 0=primary, 1=secondary, 2=tertiary
     void setPosVelYawSourceSet(uint8_t source_set_idx);
     uint8_t getPosVelYawSourceSet() const { return active_source_set; }
 
     // get/set velocity source
-    SourceXY getVelXYSource() const { return _source_set[active_source_set].velxy; }
-    SourceZ getVelZSource() const { return _source_set[active_source_set].velz; }
+    SourceXY getVelXYSource() const { return getVelXYSource(active_source_set); }
+    SourceXY getVelXYSource(uint8_t source_set_idx) const;
+    SourceZ getVelZSource() const { return getVelZSource(active_source_set); }
+    SourceZ getVelZSource(uint8_t source_set_idx) const;
 
     // true/false of whether velocity source should be used
     bool useVelXYSource(SourceXY velxy_source) const;
+    bool useVelXYSource(SourceXY velxy_source, uint8_t source_set_idx) const;
     bool useVelZSource(SourceZ velz_source) const;
+    bool useVelZSource(SourceZ velz_source, uint8_t source_set_idx) const;
 
     // true if a velocity source is configured
     bool haveVelZSource() const;
+    bool haveVelZSource(uint8_t source_set_idx) const;
 
     // get yaw source
     SourceYaw getYawSource() const;
-
-    // align position of inactive sources to ahrs
-    void align_inactive_sources();
+    SourceYaw getYawSource(uint8_t source_set_idx) const;
 
     // sensor-specific helper functions
 

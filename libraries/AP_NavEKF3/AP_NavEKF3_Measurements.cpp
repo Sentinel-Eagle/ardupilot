@@ -541,6 +541,18 @@ void NavEKF3_core::readGpsData()
 {
     // check for new GPS data
     const auto &gps = dal.gps();
+    const bool lane_uses_gps_data = uses_any_gps_source();
+
+    if (!lane_uses_gps_data) {
+        gpsCheckStatus.bad_fix = false;
+        gpsNoiseScaler = 1.0f;
+        gpsGoodToAlign = false;
+        gpsAccuracyGood = false;
+        gpsAccuracyGoodForAltitude = false;
+        gpsIsInUse = false;
+        useGpsVertVel = false;
+        return;
+    }
 
     // limit update rate to avoid overflowing the FIFO buffer
     if (gps.last_message_time_ms(selected_gps) - lastTimeGpsReceived_ms <= frontend->sensorIntervalMin_ms) {
@@ -627,7 +639,7 @@ void NavEKF3_core::readGpsData()
     }
 
     // Check if GPS can output vertical velocity, vertical velocity use is permitted and set GPS fusion mode accordingly
-    if (gpsDataNew.have_vz && frontend->sources.useVelZSource(AP_NavEKF_Source::SourceZ::GPS)) {
+    if (gpsDataNew.have_vz && uses_velz_source(AP_NavEKF_Source::SourceZ::GPS)) {
         useGpsVertVel = true;
     } else {
         useGpsVertVel = false;
@@ -642,14 +654,15 @@ void NavEKF3_core::readGpsData()
     // Read the GPS location in WGS-84 lat,long,height coordinates
     const Location &gpsloc = gps.location(selected_gps);
 
-    // Set the EKF origin and magnetic field declination if not previously set and GPS checks have passed
+    // Set the EKF origin if not previously set and GPS checks have passed.
+    // Non-GPS lanes must not silently borrow GPS origin, otherwise GPS still
+    // perturbs EXTNAV/NONE lanes despite source separation.
     if (gpsGoodToAlign && !validOrigin) {
         Location gpsloc_fieldelevation = gpsloc; 
         // if flying, correct for height change from takeoff so that the origin is at field elevation
         if (inFlight) {
             gpsloc_fieldelevation.alt += (int32_t)(100.0f * stateStruct.position.z);
         }
-
         if (!setOrigin(gpsloc_fieldelevation)) {
             // set an error as an attempt was made to set the origin more than once
             INTERNAL_ERROR(AP_InternalError::error_t::flow_of_control);
@@ -692,6 +705,7 @@ void NavEKF3_core::readGpsData()
             gpsDataNew.hgt = 0.01 * (gpsloc.alt - EKF_origin.alt);
         }
         storedGPS.push(gpsDataNew);
+        lastGpsBufferPushTime_ms = gpsDataNew.time_ms;
         // declare GPS in use
         gpsIsInUse = true;
     }
@@ -700,6 +714,10 @@ void NavEKF3_core::readGpsData()
 // check for new valid GPS yaw data
 void NavEKF3_core::readGpsYawData()
 {
+    if (!uses_gps_yaw_source()) {
+        return;
+    }
+
     const auto &gps = dal.gps();
 
     // if the GPS has yaw data then fuse it as an Euler yaw angle
@@ -779,7 +797,6 @@ void NavEKF3_core::calcFiltBaroOffset()
 void NavEKF3_core::correctEkfOriginHeight()
 {
     // Estimate the WGS-84 height of the EKF's origin using a Bayes filter
-
     // calculate the variance of our a-priori estimate of the ekf origin height
     ftype deltaTime = constrain_ftype(0.001f * (imuDataDelayed.time_ms - lastOriginHgtTime_ms), 0.0, 1.0);
     if (activeHgtSource == AP_NavEKF_Source::SourceZ::BARO) {
@@ -1058,6 +1075,7 @@ void NavEKF3_core::writeExtNavData(const Vector3f &pos, const Quaternion &quat, 
 
     // store position data to buffer
     storedExtNav.push(extNavDataNew);
+    lastExtNavBufferPushTime_ms = extNavDataNew.time_ms;
 
     // protect against attitude or angle being NaN
     if (!quat.is_nan() && !isnan(angErr)) {

@@ -100,7 +100,7 @@ void NavEKF3_core::Log_Write_XKFS(uint64_t time_us) const
         baro_index     : selected_baro,
         gps_index      : selected_gps,
         airspeed_index : getActiveAirspeed(),
-        source_set     : frontend->sources.getPosVelYawSourceSet()
+        source_set     : source_set_index()
     };
     AP::logger().WriteBlock(&pkt, sizeof(pkt));
 }
@@ -129,8 +129,8 @@ void NavEKF3_core::Log_Write_XKF3(uint64_t time_us) const
         innovMZ : (int16_t)(magInnov.z),
         innovYaw : (int16_t)(100*degrees(yawInnov)),
         innovVT : (int16_t)(100*tasInnov),
-        rerr : frontend->coreRelativeErrors[core_index],
-        errorScore : frontend->coreErrorScores[core_index]
+        rerr : 0,
+        errorScore : errorScore()
     };
     AP::logger().WriteBlock(&pkt3, sizeof(pkt3));
 }

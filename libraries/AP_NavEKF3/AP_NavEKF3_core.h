@@ -141,6 +141,16 @@ public:
     // Check basic filter health metrics and return a consolidated health status
     bool healthy(void) const;
 
+    // return true if the configured horizontal aiding source for this lane is currently available
+    bool has_required_posxy_aiding(void) const;
+    const char *posxy_aiding_failure_reason(void) const;
+
+    // return true if the horizontal position innovation test is within the normal acceptance limit
+    bool has_acceptable_posxy_variance(void) const;
+
+    // return true if all configured sources for this lane are ready for use during pre-arm checks
+    bool configured_sources_ready(char *failure_msg, uint8_t failure_msg_len) const;
+
     // Return a consolidated error score where higher numbers are less healthy
     // Intended to be used by the front-end to determine which is the primary EKF
     float errorScore(void) const;
@@ -226,6 +236,7 @@ public:
     // All NED positions calculated by the filter will be relative to this location
     // returns false if the origin has already been set
     bool setOriginLLH(const Location &loc);
+    bool accepts_external_origin(void) const;
 
     // Set the EKF's NE horizontal position states and their corresponding variances from a supplied WGS-84 location and uncertainty
     // The altitude element of the location is not used.
@@ -863,6 +874,7 @@ private:
 
     // return true if the filter to be ready to use external nav data
     bool readyToUseExtNav(void) const;
+    bool extNavPosFreshAtFusionHorizon(void) const;
 
     // return true if we should use the range finder sensor
     bool useRngFinder(void) const;
@@ -1094,6 +1106,7 @@ private:
     uint32_t lastTasPassTime_ms;    // time stamp when airspeed measurement last passed innovation consistency check (msec)
     uint32_t lastTasFailTime_ms;    // time stamp when airspeed measurement last failed innovation consistency check (msec)
     uint32_t lastTimeGpsReceived_ms;// last time we received GPS data
+    uint32_t lastGpsBufferPushTime_ms; // timestamp of the last GPS sample pushed into the fusion buffer
     uint32_t timeAtLastAuxEKF_ms;   // last time the auxiliary filter was run to fuse range or optical flow measurements
     uint32_t lastHealthyMagTime_ms; // time the magnetometer was last declared healthy
     bool allMagSensorsFailed;       // true if all magnetometer sensors have timed out on this flight and we are no longer using magnetometer data
@@ -1115,8 +1128,7 @@ private:
     bool needEarthBodyVarReset;     // we need to reset mag earth variances at next CovariancePrediction
     bool inhibitDelAngBiasStates;   // true when IMU delta angle bias states are inactive
     bool gpsIsInUse;                // bool true when GPS data is being used to correct states estimates
-    Location EKF_origin;     // LLH origin of the NED axis system, internal only
-    Location &public_origin; // LLH origin of the NED axis system, public functions
+    Location EKF_origin;     // LLH origin of the NED axis system, lane-local only
     bool validOrigin;               // true when the EKF origin is valid
     ftype gpsSpdAccuracy;           // estimated speed accuracy in m/s returned by the GPS receiver
     ftype gpsPosAccuracy;           // estimated position accuracy in m returned by the GPS receiver
@@ -1431,9 +1443,13 @@ private:
     EKF_obs_buffer_t<ext_nav_elements> storedExtNav; // external navigation data buffer
     ext_nav_elements extNavDataDelayed; // External nav at the fusion time horizon
     uint32_t extNavMeasTime_ms;         // time external measurements were accepted for input to the data buffer (msec)
+    uint32_t lastExtNavBufferPushTime_ms; // timestamp of the last EXTNAV position sample pushed into the fusion buffer
     uint32_t extNavLastPosResetTime_ms; // last time the external nav systen performed a position reset (msec)
     bool extNavDataToFuse;              // true when there is new external nav data to fuse
     bool extNavUsedForPos;              // true when the external nav data is being used as a position reference.
+    bool extNavPosAvailableLast;        // true when EXTNAV position data was available on the previous fusion step
+    bool extNavPosResetOnRecoveryPending; // true when EXTNAV was lost and a one-shot reset should happen on recovery
+    bool extNavRepositionMessageSentThisCycle; // true when an EXTNAV reposition message was already emitted on this fusion step
     EKF_obs_buffer_t<ext_nav_vel_elements> storedExtNavVel;    // external navigation velocity data buffer
     ext_nav_vel_elements extNavVelDelayed;  // external navigation velocity data at the fusion time horizon.  Already corrected for sensor position
     uint32_t extNavVelMeasTime_ms;      // time external navigation velocity measurements were accepted for input to the data buffer (msec)
@@ -1566,6 +1582,19 @@ private:
     void update_mag_selection(void);
     void update_baro_selection(void);
     void update_airspeed_selection(void);
+
+    // source-set mapping for this lane/core
+    uint8_t source_set_index(void) const;
+    bool uses_posxy_source(AP_NavEKF_Source::SourceXY source) const;
+    bool uses_velxy_source(AP_NavEKF_Source::SourceXY source) const;
+    bool uses_posz_source(AP_NavEKF_Source::SourceZ source) const;
+    bool uses_velz_source(AP_NavEKF_Source::SourceZ source) const;
+    bool has_velz_source(void) const;
+    bool uses_gps_yaw_source(void) const;
+    bool uses_any_gps_source(void) const;
+    AP_NavEKF_Source::SourceXY posxy_source(void) const;
+    AP_NavEKF_Source::SourceZ posz_source(void) const;
+    AP_NavEKF_Source::SourceYaw yaw_source(void) const;
 
     // selected and preferred sensor instances. We separate selected
     // from preferred so that calcGpsGoodToAlign() can ensure the

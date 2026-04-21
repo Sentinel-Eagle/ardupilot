@@ -10,11 +10,71 @@
 // constructor
 NavEKF3_core::NavEKF3_core(NavEKF3 *_frontend) :
     frontend(_frontend),
-    dal(AP::dal()),
-    public_origin(frontend->common_EKF_origin)
+    dal(AP::dal())
 {
     firstInitTime_ms = 0;
     lastInitFailReport_ms = 0;
+}
+
+uint8_t NavEKF3_core::source_set_index(void) const
+{
+    return MIN(core_index, uint8_t(AP_NAKEKF_SOURCE_SET_MAX - 1));
+}
+
+bool NavEKF3_core::uses_posxy_source(AP_NavEKF_Source::SourceXY source) const
+{
+    return frontend->sources.getPosXYSource(source_set_index()) == source;
+}
+
+bool NavEKF3_core::uses_velxy_source(AP_NavEKF_Source::SourceXY source) const
+{
+    return frontend->sources.useVelXYSource(source, source_set_index());
+}
+
+bool NavEKF3_core::uses_posz_source(AP_NavEKF_Source::SourceZ source) const
+{
+    return frontend->sources.getPosZSource(source_set_index()) == source;
+}
+
+bool NavEKF3_core::uses_velz_source(AP_NavEKF_Source::SourceZ source) const
+{
+    return frontend->sources.useVelZSource(source, source_set_index());
+}
+
+bool NavEKF3_core::has_velz_source(void) const
+{
+    return frontend->sources.haveVelZSource(source_set_index());
+}
+
+bool NavEKF3_core::uses_gps_yaw_source(void) const
+{
+    return yaw_source() == AP_NavEKF_Source::SourceYaw::GPS ||
+           yaw_source() == AP_NavEKF_Source::SourceYaw::GPS_COMPASS_FALLBACK;
+}
+
+bool NavEKF3_core::uses_any_gps_source(void) const
+{
+    return uses_posxy_source(AP_NavEKF_Source::SourceXY::GPS) ||
+           uses_velxy_source(AP_NavEKF_Source::SourceXY::GPS) ||
+           uses_posz_source(AP_NavEKF_Source::SourceZ::GPS) ||
+           uses_velz_source(AP_NavEKF_Source::SourceZ::GPS) ||
+           uses_gps_yaw_source() ||
+           yaw_source() == AP_NavEKF_Source::SourceYaw::GSF;
+}
+
+AP_NavEKF_Source::SourceXY NavEKF3_core::posxy_source(void) const
+{
+    return frontend->sources.getPosXYSource(source_set_index());
+}
+
+AP_NavEKF_Source::SourceZ NavEKF3_core::posz_source(void) const
+{
+    return frontend->sources.getPosZSource(source_set_index());
+}
+
+AP_NavEKF_Source::SourceYaw NavEKF3_core::yaw_source(void) const
+{
+    return frontend->sources.getYawSource(source_set_index());
 }
 
 // setup this core backend
@@ -120,7 +180,8 @@ bool NavEKF3_core::setup_core(uint8_t _imu_index, uint8_t _core_index)
         return false;
     }
 #if EK3_FEATURE_BODY_ODOM
-    if(frontend->sources.ext_nav_enabled() && !storedBodyOdm.init(obs_buffer_length)) {
+    if(frontend->sources.ext_nav_enabled() && uses_velxy_source(AP_NavEKF_Source::SourceXY::EXTNAV) &&
+       !storedBodyOdm.init(obs_buffer_length)) {
         return false;
     }
     if(frontend->sources.wheel_encoder_enabled() && !storedWheelOdm.init(imu_buffer_length)) {
@@ -142,13 +203,19 @@ bool NavEKF3_core::setup_core(uint8_t _imu_index, uint8_t _core_index)
     }
 #endif
 #if EK3_FEATURE_EXTERNAL_NAV
-    if (frontend->sources.ext_nav_enabled() && !storedExtNav.init(extnav_buffer_length)) {
+    const bool use_extnav = frontend->sources.ext_nav_enabled() &&
+        (uses_posxy_source(AP_NavEKF_Source::SourceXY::EXTNAV) ||
+         uses_posz_source(AP_NavEKF_Source::SourceZ::EXTNAV) ||
+         uses_velxy_source(AP_NavEKF_Source::SourceXY::EXTNAV) ||
+         uses_velz_source(AP_NavEKF_Source::SourceZ::EXTNAV) ||
+         yaw_source() == AP_NavEKF_Source::SourceYaw::EXTNAV);
+    if (use_extnav && !storedExtNav.init(extnav_buffer_length)) {
         return false;
     }
-    if (frontend->sources.ext_nav_enabled() && !storedExtNavVel.init(extnav_buffer_length)) {
+    if (use_extnav && !storedExtNavVel.init(extnav_buffer_length)) {
         return false;
     }
-    if(frontend->sources.ext_nav_enabled() && !storedExtNavYawAng.init(extnav_buffer_length)) {
+    if (use_extnav && !storedExtNavYawAng.init(extnav_buffer_length)) {
         return false;
     }
 #endif // EK3_FEATURE_EXTERNAL_NAV
@@ -206,6 +273,7 @@ void NavEKF3_core::InitialiseVariables()
     lastTasPassTime_ms = 0;
     lastSynthYawTime_ms = 0;
     lastTimeGpsReceived_ms = 0;
+    lastGpsBufferPushTime_ms = 0;
     timeAtLastAuxEKF_ms = imuSampleTime_ms;
     flowValidMeaTime_ms = imuSampleTime_ms;
     rngValidMeaTime_ms = imuSampleTime_ms;
@@ -371,9 +439,13 @@ void NavEKF3_core::InitialiseVariables()
     // external nav data fusion
     extNavDataDelayed = {};
     extNavMeasTime_ms = 0;
+    lastExtNavBufferPushTime_ms = 0;
     extNavLastPosResetTime_ms = 0;
     extNavDataToFuse = false;
     extNavUsedForPos = false;
+    extNavPosAvailableLast = false;
+    extNavPosResetOnRecoveryPending = false;
+    extNavRepositionMessageSentThisCycle = false;
     extNavVelDelayed = {};
     extNavVelToFuse = false;
     useExtNavVel = false;
@@ -456,7 +528,7 @@ bool NavEKF3_core::InitialiseFilterBootstrap(void)
     // update sensor selection (for affinity)
     update_sensor_selection();
 
-    const bool using_extnav_pos = frontend->sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::EXTNAV;
+    const bool using_extnav_pos = uses_posxy_source(AP_NavEKF_Source::SourceXY::EXTNAV);
     // If we are a plane and don't have GPS lock then don't initialise unless using external navigation for position
     if (assume_zero_sideslip() &&
         !using_extnav_pos &&
@@ -531,8 +603,8 @@ bool NavEKF3_core::InitialiseFilterBootstrap(void)
     ResetHeight();
 
     // initialise sources
-    posxy_source_last = frontend->sources.getPosXYSource();
-    yaw_source_last = frontend->sources.getYawSource();
+    posxy_source_last = posxy_source();
+    yaw_source_last = yaw_source();
 
     // define Earth rotation vector in the NED navigation frame
     calcEarthRateNED(earthRateNED, dal.get_home().lat);
@@ -2195,14 +2267,16 @@ void NavEKF3_core::verifyTiltErrorVariance()
 #endif
 
 /*
-  move the EKF origin to the current position at 1Hz. The public_origin doesn't move.
+  move the lane-local EKF origin to the current position at 1Hz.
   By moving the EKF origin we keep the distortion due to spherical
   shape of the earth to a minimum.
  */
 void NavEKF3_core::moveEKFOrigin(void)
 {
-    // only move origin when we have a origin and we're using GPS
-    if (!frontend->common_origin_valid || !filterStatus.flags.using_gps) {
+    // only move origin on lanes whose horizontal position source is GPS
+    if (!uses_posxy_source(AP_NavEKF_Source::SourceXY::GPS) ||
+        !validOrigin ||
+        !filterStatus.flags.using_gps) {
         return;
     }
 
