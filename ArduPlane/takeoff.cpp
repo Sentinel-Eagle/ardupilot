@@ -332,3 +332,4 @@ bool Plane::check_takeoff_timeout(void)
      }
      return false;
 }
+
