@@ -135,7 +135,7 @@ const AP_Param::GroupInfo AP_NavEKF_Source::var_info[] = {
     // @Param: _OPTIONS
     // @DisplayName: EKF Source Options
     // @Description: EKF Source Options
-    // @Bitmask: 0:FuseAllVelocities
+    // @Bitmask: 0:FuseAllVelocities, 1:AlignExtNavPosWhenUsingOptFlow
     // @User: Advanced
     AP_GROUPINFO("_OPTIONS", 16, AP_NavEKF_Source, _options, (int16_t)SourceOptions::FUSE_ALL_VELOCITIES),
 
@@ -148,11 +148,11 @@ AP_NavEKF_Source::AP_NavEKF_Source()
 }
 
 // set position, velocity and yaw sources to either 0=primary, 1=secondary, 2=tertiary
-void AP_NavEKF_Source::setPosVelYawSourceSet(uint8_t source_set_idx)
+void AP_NavEKF_Source::setPosVelYawSourceSet(AP_NavEKF_Source::SourceSetSelection source_set_idx)
 {
     // sanity check source idx
-    if (source_set_idx < AP_NAKEKF_SOURCE_SET_MAX) {
-        active_source_set = source_set_idx;
+    if ((uint8_t)source_set_idx < AP_NAKEKF_SOURCE_SET_MAX) {
+        active_source_set = (uint8_t)source_set_idx;
 #if HAL_LOGGING_ENABLED
         static const LogEvent evt[AP_NAKEKF_SOURCE_SET_MAX] {
             LogEvent::EK3_SOURCES_SET_TO_PRIMARY,
@@ -314,7 +314,6 @@ AP_NavEKF_Source::SourceZ AP_NavEKF_Source::getVelZSource(uint8_t source_set_idx
     return _source_set[source_set_idx].velz;
 }
 
-// align position of inactive sources to ahrs
 // sensor specific helper functions
 bool AP_NavEKF_Source::usingGPS() const
 {
@@ -510,9 +509,16 @@ bool AP_NavEKF_Source::pre_arm_check(bool requires_position, char *failure_msg, 
         return false;
     }
 
-    if (rangefinder_required && (dal.rangefinder() == nullptr || !dal.rangefinder()->has_orientation(ROTATION_PITCH_270))) {
-        hal.util->snprintf(failure_msg, failure_msg_len, ekf_requires_msg, "RangeFinder");
-        return false;
+    if (rangefinder_required) {
+#if AP_RANGEFINDER_ENABLED
+        const bool have_rangefinder = (dal.rangefinder() != nullptr && dal.rangefinder()->has_orientation(ROTATION_PITCH_270));
+#else
+        const bool have_rangefinder = false;
+#endif
+        if (!have_rangefinder) {
+            hal.util->snprintf(failure_msg, failure_msg_len, ekf_requires_msg, "RangeFinder");
+            return false;
+        }
     }
 
     if (visualodom_required) {

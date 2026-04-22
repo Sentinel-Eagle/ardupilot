@@ -358,7 +358,7 @@ const AP_Param::GroupInfo AP_OSD_Screen::var_info[] = {
 #if HAL_WITH_ESC_TELEM
     // @Param: ESCTEMP_EN
     // @DisplayName: ESCTEMP_EN
-    // @Description: Displays first esc's temp
+    // @Description: Displays highest temp of all active ESCs, or of a specific ECS if OSDx_ESC_IDX is set
     // @Values: 0:Disabled,1:Enabled
 
     // @Param: ESCTEMP_X
@@ -374,7 +374,7 @@ const AP_Param::GroupInfo AP_OSD_Screen::var_info[] = {
 
     // @Param: ESCRPM_EN
     // @DisplayName: ESCRPM_EN
-    // @Description: Displays first esc's rpm
+    // @Description: Displays highest rpm of all active ESCs, or of a specific ESC if OSDx_ESC_IDX is set
     // @Values: 0:Disabled,1:Enabled
 
     // @Param: ESCRPM_X
@@ -390,7 +390,7 @@ const AP_Param::GroupInfo AP_OSD_Screen::var_info[] = {
 
     // @Param: ESCAMPS_EN
     // @DisplayName: ESCAMPS_EN
-    // @Description: Displays first esc's current
+    // @Description: Displays the current of the ESC with the highest rpm of all active ESCs, or of a specific ESC if OSDx_ESC_IDX is set
     // @Values: 0:Disabled,1:Enabled
 
     // @Param: ESCAMPS_X
@@ -1166,6 +1166,14 @@ const AP_Param::GroupInfo AP_OSD_Screen::var_info2[] = {
     AP_SUBGROUPINFO(rc_lq, "RC_LQ", 9, AP_OSD_Screen, AP_OSD_Setting),
 #endif
 
+#if HAL_WITH_ESC_TELEM
+    // @Param: ESC_IDX
+    // @DisplayName: ESC_IDX
+    // @Description: Index of the ESC to use for displaying ESC information. 0 means use the ESC with the highest value.
+    // @Range: 0 32
+    AP_GROUPINFO("ESC_IDX", 10, AP_OSD_Screen, esc_index, 0),
+#endif
+
     AP_GROUPEND
 };
 
@@ -1609,73 +1617,58 @@ void AP_OSD_Screen::draw_batused(uint8_t x, uint8_t y)
 }
 #endif
 
+//Autoscroll message is the same as in minimosd-extra.
+//Thanks to night-ghost for the approach.
 void AP_OSD_Screen::draw_message(uint8_t x, uint8_t y)
 {
     AP_Notify * notify = AP_Notify::get_singleton();
     if (notify) {
         int32_t visible_time = AP_HAL::millis() - notify->get_text_updated_millis();
-        if (visible_time < osd->msgtime_s *1000) 
-            draw_buffer(x, y, notify->get_text(), visible_time);
-    }
-}
+        if (visible_time < osd->msgtime_s *1000) {
+            char buffer[NOTIFY_TEXT_BUFFER_SIZE];
+            strncpy(buffer, notify->get_text(), sizeof(buffer));
+            int16_t len = strnlen(buffer, sizeof(buffer));
 
+            for (int16_t i=0; i<len; i++) {
+                //converted to uppercase,
+                //because we do not have small letter chars inside used font
+                buffer[i] = toupper(buffer[i]);
+                //normalize whitespace
+                if (isspace(buffer[i])) {
+                    buffer[i] = ' ';
+                }
+            }
 
-void AP_OSD_Screen::draw_message_permanent(uint8_t x, uint8_t y)
-{
-    AP_Notify * notify = AP_Notify::get_singleton();
-    if (notify) {
-        int32_t visible_time = AP_HAL::millis();
-        draw_buffer(x, y, notify->get_text(true), visible_time);
-    }
-}
+            int16_t start_position = 0;
+            //scroll if required
+            //scroll pattern: wait, scroll to the left, wait, scroll to the right
+            if (len > message_visible_width) {
+                int16_t chars_to_scroll = len - message_visible_width;
+                int16_t total_cycles = 2*message_scroll_delay + 2*chars_to_scroll;
+                int16_t current_cycle = (visible_time / message_scroll_time_ms) % total_cycles;
 
-//Autoscroll message is the same as in minimosd-extra.
-//Thanks to night-ghost for the approach.
-void AP_OSD_Screen::draw_buffer(uint8_t x, uint8_t y, const char *input_buffer, int32_t visible_time)
-{
-    char buffer[NOTIFY_TEXT_BUFFER_SIZE];
-    strncpy(buffer, input_buffer, sizeof(buffer) - 1);
-    buffer[sizeof(buffer) - 1] = '\0';
-    int16_t len = strnlen(buffer, sizeof(buffer));
+                //calculate scroll start_position
+                if (current_cycle < total_cycles/2) {
+                    //move to the left
+                    start_position = current_cycle - message_scroll_delay;
+                } else {
+                    //move to the right
+                    start_position = total_cycles - current_cycle;
+                }
+                start_position = constrain_int16(start_position, 0, chars_to_scroll);
+                int16_t end_position = start_position + message_visible_width;
 
-    for (int16_t i=0; i<len; i++) {
-        //converted to uppercase,
-        //because we do not have small letter chars inside used font
-        buffer[i] = toupper(buffer[i]);
-        //normalize whitespace
-        if (isspace(buffer[i])) {
-            buffer[i] = ' ';
+                //ensure array boundaries
+                start_position = MIN(start_position, int(sizeof(buffer)-1));
+                end_position = MIN(end_position, int(sizeof(buffer)-1));
+
+                //trim invisible part
+                buffer[end_position] = 0;
+            }
+
+            backend->write(x, y, buffer + start_position);
         }
     }
-
-    int16_t start_position = 0;
-    //scroll if required
-    //scroll pattern: wait, scroll to the left, wait, scroll to the right
-    if (len > message_visible_width) {
-        int16_t chars_to_scroll = len - message_visible_width;
-        int16_t total_cycles = 2*message_scroll_delay + 2*chars_to_scroll;
-        int16_t current_cycle = (visible_time / message_scroll_time_ms) % total_cycles;
-
-        //calculate scroll start_position
-        if (current_cycle < total_cycles/2) {
-            //move to the left
-            start_position = current_cycle - message_scroll_delay;
-        } else {
-            //move to the right
-            start_position = total_cycles - current_cycle;
-        }
-        start_position = constrain_int16(start_position, 0, chars_to_scroll);
-        int16_t end_position = start_position + message_visible_width;
-
-        //ensure array boundaries
-        start_position = MIN(start_position, int(sizeof(buffer)-1));
-        end_position = MIN(end_position, int(sizeof(buffer)-1));
-
-        //trim invisible part
-        buffer[end_position] = 0;
-    }
-
-    backend->write(x, y, buffer + start_position);
 }
 
 // draw a arrow at the given angle, and print the given magnitude
@@ -2018,8 +2011,13 @@ void AP_OSD_Screen::draw_vspeed(uint8_t x, uint8_t y)
 void AP_OSD_Screen::draw_esc_temp(uint8_t x, uint8_t y)
 {
     int16_t etemp;
-    // first parameter is index into array of ESC's.  Hardwire to zero (first) for now.
-    if (!AP::esc_telem().get_temperature(0, etemp)) {
+
+    if (esc_index > 0) {
+        if (!AP::esc_telem().get_temperature(esc_index-1, etemp)) {
+            return;
+        }
+    }
+    else if (!AP::esc_telem().get_highest_temperature(etemp)) {
         return;
     }
 
@@ -2029,8 +2027,12 @@ void AP_OSD_Screen::draw_esc_temp(uint8_t x, uint8_t y)
 void AP_OSD_Screen::draw_esc_rpm(uint8_t x, uint8_t y)
 {
     float rpm;
-    // first parameter is index into array of ESC's.  Hardwire to zero (first) for now.
-    if (!AP::esc_telem().get_rpm(0, rpm)) {
+    uint8_t esc = AP::esc_telem().get_max_rpm_esc();
+    if (esc_index > 0) {
+        if (!AP::esc_telem().get_rpm(esc_index-1, rpm)) {
+            return;
+        }
+    } else if (!AP::esc_telem().get_rpm(esc, rpm)) {
         return;
     }
     float krpm = rpm * 0.001f;
@@ -2041,8 +2043,12 @@ void AP_OSD_Screen::draw_esc_rpm(uint8_t x, uint8_t y)
 void AP_OSD_Screen::draw_esc_amps(uint8_t x, uint8_t y)
 {
     float amps;
-    // first parameter is index into array of ESC's.  Hardwire to zero (first) for now.
-    if (!AP::esc_telem().get_current(0, amps)) {
+    uint8_t esc = AP::esc_telem().get_max_rpm_esc();
+    if (esc_index > 0) {
+        if (!AP::esc_telem().get_current(esc_index-1, amps)) {
+            return;
+        }
+    } else if (!AP::esc_telem().get_current(esc, amps)) {
         return;
     }
     backend->write(x, y, false, "%4.1f%c", amps, SYMBOL(SYM_AMP));
@@ -2053,7 +2059,7 @@ void AP_OSD_Screen::draw_esc_amps(uint8_t x, uint8_t y)
 bool AP_OSD_Screen::is_btfl_fonts()
 {
     const AP_MSP *p_msp = AP::msp();
-    return (p_msp != nullptr && p_msp->is_option_enabled(AP_MSP::Option::DISPLAYPORT_BTFL_SYMBOLS));
+    return (p_msp != nullptr && p_msp->is_option_enabled(AP_MSP::Option::DISPLAYPORT_BTFL_SYMBOLS) && !p_msp->is_option_enabled(AP_MSP::Option::DISPLAYPORT_INAV_SYMBOLS));
 }
 
 void AP_OSD_Screen::draw_rc_tx_power(uint8_t x, uint8_t y)
@@ -2528,6 +2534,7 @@ void AP_OSD_Screen::draw_fence(uint8_t x, uint8_t y)
 }
 #endif
 
+#if AP_RANGEFINDER_ENABLED
 void AP_OSD_Screen::draw_rngf(uint8_t x, uint8_t y)
 {
     RangeFinder *rangefinder = RangeFinder::get_singleton();
@@ -2541,6 +2548,7 @@ void AP_OSD_Screen::draw_rngf(uint8_t x, uint8_t y)
         backend->write(x, y, false, "%c%4.1f%c", SYMBOL(SYM_RNGFD), u_scale(DISTANCE, distance), u_icon(DISTANCE));
     }
 }
+#endif
 
 #define DRAW_SETTING(n) if (n.enabled) draw_ ## n(n.xpos, n.ypos)
 
@@ -2558,7 +2566,6 @@ void AP_OSD_Screen::draw(void)
 #endif
 
     DRAW_SETTING(message);
-    DRAW_SETTING(message_permanent);
     DRAW_SETTING(horizon);
     DRAW_SETTING(compass);
     DRAW_SETTING(altitude);
@@ -2567,7 +2574,9 @@ void AP_OSD_Screen::draw(void)
     DRAW_SETTING(hgt_abvterr);
 #endif
 
+#if AP_RANGEFINDER_ENABLED
     DRAW_SETTING(rngf);
+#endif
     DRAW_SETTING(waypoint);
     DRAW_SETTING(xtrack_error);
     DRAW_SETTING(bat_volt);
@@ -2575,8 +2584,10 @@ void AP_OSD_Screen::draw(void)
     DRAW_SETTING(avgcellvolt);
     DRAW_SETTING(avgcellrestvolt);
     DRAW_SETTING(restvolt);
+#if AP_RSSI_ENABLED
     DRAW_SETTING(rssi);
     DRAW_SETTING(link_quality);
+#endif
     DRAW_SETTING(current);
     DRAW_SETTING(batused);
     DRAW_SETTING(bat2used);

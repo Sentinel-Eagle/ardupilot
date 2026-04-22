@@ -33,6 +33,7 @@
 #include <GCS_MAVLink/GCS_MAVLink.h>
 #endif
 #include <AC_Fence/AC_Fence_config.h>
+#include <AP_RangeFinder/AP_RangeFinder_config.h>
 
 class AP_OSD_Backend;
 class AP_MSP;
@@ -186,7 +187,6 @@ private:
     AP_OSD_Setting sats{true, 1, 3};
     AP_OSD_Setting fltmode{true, 2, 8};
     AP_OSD_Setting message{true, 2, 6};
-    AP_OSD_Setting message_permanent{true, 0, 5};
     AP_OSD_Setting gspeed{true, 2, 14};
     AP_OSD_Setting horizon{true, 14, 8};
     AP_OSD_Setting home{true, 14, 1};
@@ -260,6 +260,9 @@ private:
     AP_Int8 txt_resolution;
     AP_Int8 font_index;
 #endif
+#if HAL_WITH_ESC_TELEM
+    AP_Int8 esc_index;
+#endif
 
     void draw_altitude(uint8_t x, uint8_t y);
     void draw_bat_volt(uint8_t instance,VoltageType  type,uint8_t x, uint8_t y);
@@ -276,7 +279,6 @@ private:
     void draw_sats(uint8_t x, uint8_t y);
     void draw_fltmode(uint8_t x, uint8_t y);
     void draw_message(uint8_t x, uint8_t y);
-    void draw_message_permanent(uint8_t x, uint8_t y);
     void draw_gspeed(uint8_t x, uint8_t y);
     void draw_horizon(uint8_t x, uint8_t y);
     void draw_home(uint8_t x, uint8_t y);
@@ -298,7 +300,6 @@ private:
     void draw_pluscode(uint8_t x, uint8_t y);
 #endif
     //helper functions
-    void draw_buffer(uint8_t x, uint8_t y, const char *input_buffer, int32_t visible_time);
     void draw_speed(uint8_t x, uint8_t y, float angle_rad, float magnitude);
     void draw_distance(uint8_t x, uint8_t y, float distance);
     char get_arrow_font_index (int32_t angle_cd);
@@ -334,7 +335,9 @@ private:
 #if AP_FENCE_ENABLED
     void draw_fence(uint8_t x, uint8_t y);
 #endif
+#if AP_RANGEFINDER_ENABLED
     void draw_rngf(uint8_t x, uint8_t y);
+#endif
 
 #if AP_OSD_EXTENDED_LNK_STATS
     // Extended link stats data panels
@@ -500,7 +503,6 @@ private:
 
 #if AP_RC_CHANNEL_ENABLED
     Event map_rc_input_to_event() const;
-    RC_Channel::AuxSwitchPos get_channel_pos(uint8_t rcmapchan) const;
 #endif
 
     uint8_t _selected_param = 1;
