@@ -256,31 +256,15 @@ bool NavEKF3_core::getPosNE(Vector2f &posNE) const
         return true;
 
     } else {
-        // In constant position mode the EKF position states are at the origin, so we cannot use them as a position estimate
-        if(validOrigin) {
-            auto &gps = dal.gps();
-            if ((gps.status(selected_gps) >= AP_DAL_GPS::GPS_OK_FIX_2D)) {
-                // If the origin has been set and we have GPS, then return the GPS position relative to the origin
-                const Location &gpsloc = gps.location(selected_gps);
-                posNE = EKF_origin.get_distance_NE_ftype(gpsloc).tofloat();
-                return false;
-#if EK3_FEATURE_BEACON_FUSION
-            } else if (rngBcn.alignmentStarted) {
-                // If we are attempting alignment using range beacon data, then report the position
-                posNE.x = rngBcn.receiverPos.x;
-                posNE.y = rngBcn.receiverPos.y;
-                return false;
-#endif
-            } else {
-                // If no GPS fix is available, all we can do is provide the last known position
-                posNE = outputDataNew.position.xy().tofloat();
-                return false;
-            }
-        } else {
-            // If the origin has not been set, then we have no means of providing a relative position
+        // In constant position mode, report the lane-local drifting EKF state.
+        // This is not trustworthy for navigation, but it is the most honest
+        // representation of where the active lane currently thinks it is.
+        if (!validOrigin) {
             posNE.zero();
             return false;
         }
+        posNE = outputDataNew.position.xy().tofloat();
+        return false;
     }
     return false;
 }
@@ -311,9 +295,8 @@ bool NavEKF3_core::getHAGL(float &HAGL) const
     return !hgtTimeout && gndOffsetValid && healthy();
 }
 
-// Return the last calculated latitude, longitude and height in WGS-84
-// If a calculated location isn't available, return a raw GPS measurement
-// The status will return true if a calculation or raw measurement is available
+// Return the last calculated latitude, longitude and height in WGS-84.
+// The status will return true only if a lane-local calculated location is available.
 // The getFilterStatus() function provides a more detailed description of data health and must be checked if data is to be used for flight control
 bool NavEKF3_core::getLLH(Location &loc) const
 {
@@ -331,45 +314,26 @@ bool NavEKF3_core::getLLH(Location &loc) const
                            outputDataNew.position.y + posOffsetNED.y);
                 return true;
             } else {
-                // We have been be doing inertial dead reckoning for too long so use raw GPS if available
-                if (getGPSLLH(loc)) {
-                    return true;
-                } else {
-                    // Return the EKF estimate but mark it as invalid
-                    loc.lat = EKF_origin.lat;
-                    loc.lng = EKF_origin.lng;
-                    loc.offset(outputDataNew.position.x + posOffsetNED.x,
-                               outputDataNew.position.y + posOffsetNED.y);
-                    return false;
-                }
-            }
-        } else {
-            // Return a raw GPS reading if available and the last recorded positon if not
-            if (getGPSLLH(loc)) {
-                return true;
-            } else {
+                // Return the lane-local EKF estimate but mark it as invalid.
                 loc.lat = EKF_origin.lat;
                 loc.lng = EKF_origin.lng;
-                loc.offset(lastKnownPositionNE.x + posOffsetNED.x,
-                           lastKnownPositionNE.y + posOffsetNED.y);
-                loc.alt = EKF_origin.alt - lastKnownPositionD*100.0;
+                loc.offset(outputDataNew.position.x + posOffsetNED.x,
+                           outputDataNew.position.y + posOffsetNED.y);
                 return false;
             }
+        } else {
+            // No valid fused vertical position: report the lane-local drifting
+            // state rather than freezing at the last known point.
+            loc.lat = EKF_origin.lat;
+            loc.lng = EKF_origin.lng;
+            loc.offset(outputDataNew.position.x + posOffsetNED.x,
+                       outputDataNew.position.y + posOffsetNED.y);
+            loc.alt = EKF_origin.alt - lastKnownPositionD*100.0;
+            return false;
         }
     } else {
-        // The EKF is not navigating so use raw GPS if available
-        return getGPSLLH(loc);
+        return false;
     }
-}
-
-bool NavEKF3_core::getGPSLLH(Location &loc) const
-{
-    const auto &gps = dal.gps();
-    if ((gps.status(selected_gps) >= AP_DAL_GPS::GPS_OK_FIX_3D)) {
-        loc = gps.location(selected_gps);
-        return true;
-    }
-    return false;
 }
 
 // return the horizontal speed limit in m/s set by optical flow sensor limits

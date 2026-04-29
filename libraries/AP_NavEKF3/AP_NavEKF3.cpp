@@ -1208,6 +1208,11 @@ bool NavEKF3::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
         return false;
     }
     for (uint8_t i = 0; i < num_cores; i++) {
+        Location origin;
+        if (!core[i].getOriginLLH(origin)) {
+            dal.snprintf(failure_msg, failure_msg_len, "EKF3 core %d has no origin", (int)i);
+            return false;
+        }
         if (!core[i].healthy()) {
             const char *failure = core[i].prearm_failure_reason();
             if (failure != nullptr) {
@@ -1474,6 +1479,20 @@ bool NavEKF3::setOriginLLH(const Location &loc)
     }
     // return true if any core accepts the new origin
     return ret;
+}
+
+void NavEKF3::propagateGpsOriginOnce(const Location &loc)
+{
+    if (!core) {
+        return;
+    }
+    for (uint8_t i = 0; i < num_cores; i++) {
+        Location existing_origin;
+        if (core[i].getOriginLLH(existing_origin)) {
+            continue;
+        }
+        core[i].setOriginLLH(loc);
+    }
 }
 
 bool NavEKF3::setLatLng(const Location &loc, float posAccuracy, uint32_t timestamp_ms)
