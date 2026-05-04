@@ -422,6 +422,7 @@ void NavEKF3_core::InitialiseVariables()
     ekfGpsRefHgt = 0.0;
     velOffsetNED.zero();
     posOffsetNED.zero();
+    outputPosFrameOffsetNE.zero();
     ZERO_FARRAY(velPosObs);
 
     // range beacon fusion variables
@@ -2314,6 +2315,7 @@ void NavEKF3_core::moveEKFOrigin(void)
     loc.offset(stateStruct.position.x, stateStruct.position.y);
     const Vector2F diffNE = loc.get_distance_NE_ftype(EKF_origin);
     EKF_origin = loc;
+    outputPosFrameOffsetNE -= diffNE;
 
     // now fix all output states
     stateStruct.position.xy() += diffNE;

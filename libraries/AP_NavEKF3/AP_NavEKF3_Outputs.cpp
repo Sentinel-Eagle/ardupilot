@@ -251,19 +251,19 @@ bool NavEKF3_core::getPosNE(Vector2f &posNE) const
     // There are three modes of operation, absolute position (GPS fusion), relative position (optical flow fusion) and constant position (no position estimate available)
     if (PV_AidingMode != AID_NONE) {
         // This is the normal mode of operation where we can use the EKF position states
-        // correct for the IMU offset (EKF calculations are at the IMU)
-        posNE = (outputDataNew.position.xy() + posOffsetNED.xy()).tofloat();
+        // Correct for the IMU offset and restore a stable controller-facing
+        // frame across GPS lane-local origin moves.
+        posNE = (outputDataNew.position.xy() + posOffsetNED.xy() + outputPosFrameOffsetNE).tofloat();
         return true;
 
     } else {
-        // In constant position mode, report the lane-local drifting EKF state.
-        // This is not trustworthy for navigation, but it is the most honest
-        // representation of where the active lane currently thinks it is.
+        // In constant position mode, report the drifting EKF state in the same
+        // controller-facing frame used while aided.
         if (!validOrigin) {
             posNE.zero();
             return false;
         }
-        posNE = outputDataNew.position.xy().tofloat();
+        posNE = (outputDataNew.position.xy() + outputPosFrameOffsetNE).tofloat();
         return false;
     }
     return false;
