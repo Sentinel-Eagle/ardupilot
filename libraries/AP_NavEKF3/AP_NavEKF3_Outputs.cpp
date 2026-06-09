@@ -5,6 +5,21 @@
 #include <AP_DAL/AP_DAL.h>
 #include <GCS_MAVLink/GCS.h>
 
+static bool posxy_source_has_absolute_measurement(const AP_NavEKF_Source::SourceXY source)
+{
+    switch (source) {
+    case AP_NavEKF_Source::SourceXY::GPS:
+    case AP_NavEKF_Source::SourceXY::BEACON:
+    case AP_NavEKF_Source::SourceXY::EXTNAV:
+        return true;
+    case AP_NavEKF_Source::SourceXY::NONE:
+    case AP_NavEKF_Source::SourceXY::OPTFLOW:
+    case AP_NavEKF_Source::SourceXY::WHEEL_ENCODER:
+        return false;
+    }
+    return false;
+}
+
 // Check basic filter health metrics and return a consolidated health status
 bool NavEKF3_core::healthy(void) const
 {
@@ -41,10 +56,22 @@ bool NavEKF3_core::pre_arm_check(bool requires_position, char *failure_msg, uint
 {
     if (requires_position) {
         // additional checks when position is required, used by pre-arm checks
+        const AP_NavEKF_Source::SourceXY configured_posxy_source = posxy_source();
+        if (onGround &&
+            PV_AidingMode == AID_ABSOLUTE &&
+            posxy_source_has_absolute_measurement(configured_posxy_source) &&
+            !has_acceptable_posxy_variance()) {
+            const float hpos_innovation = sqrtf(sq(innovVelPos[3])+sq(innovVelPos[4]));
+            dal.snprintf(failure_msg, failure_msg_len,
+                         "EKF3[%u] pos error %.1f",
+                         unsigned(core_index)+1, (double)hpos_innovation);
+            return false;
+        }
+
         const float max_vel_innovation = 2.0;
         const float hvel_innovation = sqrtf(sq(innovVelPos[0])+sq(innovVelPos[1]));
         if (onGround && PV_AidingMode == AID_ABSOLUTE &&
-            frontend->sources.useVelXYSource(AP_NavEKF_Source::SourceXY::GPS) &&
+            uses_velxy_source(AP_NavEKF_Source::SourceXY::GPS) &&
             hvel_innovation > max_vel_innovation) {
             // more than 2 m/s horizontal velocity innovation on the ground
             dal.snprintf(failure_msg, failure_msg_len,

@@ -703,8 +703,8 @@ bool AP_Arming::gps_checks(bool report)
             return false;
         }
 
-        // check AHRS and GPS are within 10m of each other
-        if (gps.num_sensors() > 0) {
+        // check AHRS and GPS are within 10m of each other when GPS is the active horizontal position source
+        if (AP::ahrs().configured_to_use_gps_for_posxy() && gps.num_sensors() > 0) {
             const Location gps_loc = gps.location();
             Location ahrs_loc;
             if (AP::ahrs().get_location(ahrs_loc)) {

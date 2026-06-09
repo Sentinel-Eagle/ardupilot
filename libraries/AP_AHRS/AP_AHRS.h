@@ -422,6 +422,9 @@ public:
     //returns index of active source set used, 0=primary, 1=secondary, 2=tertiary
     uint8_t get_posvelyaw_source_set() const;
 
+    // check if the active horizontal position source is GPS
+    bool configured_to_use_gps_for_posxy() const;
+
     void Log_Write();
 
     // check if non-compass sensor is providing yaw.  Allows compass pre-arm checks to be bypassed
