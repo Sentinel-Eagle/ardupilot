@@ -5,20 +5,6 @@
 #include <GCS_MAVLink/GCS.h>
 #include <AP_DAL/AP_DAL.h>
 
-static const char *extnav_reset_reason_text(const bool extnav_pos_reset, const bool posxy_source_reset, const bool extnav_recovered_after_loss)
-{
-    if (extnav_pos_reset) {
-        return "reference reset";
-    }
-    if (extnav_recovered_after_loss) {
-        return "recovered after loss";
-    }
-    if (posxy_source_reset) {
-        return "source changed";
-    }
-    return "position reset";
-}
-
 /********************************************************
 *                   RESET FUNCTIONS                     *
 ********************************************************/
@@ -659,10 +645,6 @@ void NavEKF3_core::SelectVelPosFusion()
         (PV_AidingMode == AID_ABSOLUTE) &&
         (configured_posxy_source == AP_NavEKF_Source::SourceXY::EXTNAV) &&
         (extNavDataDelayed.posReset || posxy_source_reset || extNavRecoveredAfterLoss)) {
-        const bool extnav_pos_reset = extNavDataDelayed.posReset;
-        const bool source_reset = posxy_source_reset;
-        const bool recovered_after_loss = extNavRecoveredAfterLoss;
-
         // mark a source reset as consumed
         posxy_source_reset = false;
         extNavPosResetOnRecoveryPending = false;
@@ -670,12 +652,6 @@ void NavEKF3_core::SelectVelPosFusion()
         if (activeHgtSource == AP_NavEKF_Source::SourceZ::EXTNAV) {
             ResetPositionD(-hgtMea);
         }
-        GCS_SEND_TEXT(
-            MAV_SEVERITY_INFO,
-            "EKF3 IMU%u EXTNAV repositioned: %s",
-            (unsigned)imu_index,
-            extnav_reset_reason_text(extnav_pos_reset, source_reset, recovered_after_loss));
-        extNavRepositionMessageSentThisCycle = true;
     }
 #endif // EK3_FEATURE_EXTERNAL_NAV
 
