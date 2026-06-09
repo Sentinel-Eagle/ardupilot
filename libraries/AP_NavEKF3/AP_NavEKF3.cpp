@@ -1472,6 +1472,8 @@ bool NavEKF3::setOriginLLH(const Location &loc)
     }
     bool ret = false;
     for (uint8_t i=0; i<num_cores; i++) {
+        // Explicit set-origin requests seed lanes that do not derive their
+        // horizontal origin from GPS.
         if (!core[i].accepts_external_origin()) {
             continue;
         }
@@ -1479,20 +1481,6 @@ bool NavEKF3::setOriginLLH(const Location &loc)
     }
     // return true if any core accepts the new origin
     return ret;
-}
-
-void NavEKF3::propagateGpsOriginOnce(const Location &loc)
-{
-    if (!core) {
-        return;
-    }
-    for (uint8_t i = 0; i < num_cores; i++) {
-        Location existing_origin;
-        if (core[i].getOriginLLH(existing_origin)) {
-            continue;
-        }
-        core[i].setOriginLLH(loc);
-    }
 }
 
 bool NavEKF3::setLatLng(const Location &loc, float posAccuracy, uint32_t timestamp_ms)

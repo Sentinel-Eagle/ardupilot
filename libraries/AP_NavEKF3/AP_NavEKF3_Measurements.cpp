@@ -680,11 +680,12 @@ void NavEKF3_core::readGpsData()
     // Read the GPS location in WGS-84 lat,long,height coordinates
     const Location &gpsloc = gps.location(selected_gps);
 
-    // Set the lane-local EKF origin from GPS when GPS checks have passed.
-    // After the GPS lane establishes its origin, fan it out once to any
-    // other initialized lane that still lacks an origin. This keeps startup
-    // usable without reintroducing ongoing GPS-origin coupling.
-    if (gpsGoodToAlign && !validOrigin) {
+    // Set the lane-local EKF origin from GPS when this lane uses GPS for
+    // horizontal position and GPS checks have passed. Other lanes get their
+    // origin only from an explicit set-origin request.
+    if (uses_posxy_source(AP_NavEKF_Source::SourceXY::GPS) &&
+        gpsGoodToAlign &&
+        !validOrigin) {
         Location gpsloc_fieldelevation = gpsloc; 
         // if flying, correct for height change from takeoff so that the origin is at field elevation
         if (inFlight) {
@@ -705,8 +706,6 @@ void NavEKF3_core::readGpsData()
 
         // Set the uncertainty of the GPS origin height
         ekfOriginHgtVar = sq(gpsHgtAccuracy);
-
-        frontend->propagateGpsOriginOnce(gpsloc_fieldelevation);
 
     }
 
