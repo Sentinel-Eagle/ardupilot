@@ -544,10 +544,12 @@ bool NavEKF3_core::InitialiseFilterBootstrap(void)
     // update sensor selection (for affinity)
     update_sensor_selection();
 
-    const bool using_extnav_pos = uses_posxy_source(AP_NavEKF_Source::SourceXY::EXTNAV);
-    // If we are a plane and don't have GPS lock then don't initialise unless using external navigation for position
+    const bool can_initialise_without_gps =
+        uses_posxy_source(AP_NavEKF_Source::SourceXY::EXTNAV) ||
+        uses_posxy_source(AP_NavEKF_Source::SourceXY::NONE);
+    // If we are a plane and don't have GPS lock then don't initialise GPS-dependent lanes.
     if (assume_zero_sideslip() &&
-        !using_extnav_pos &&
+        !can_initialise_without_gps &&
         dal.gps().status(preferred_gps) < AP_DAL_GPS::GPS_OK_FIX_3D) {
         dal.snprintf(prearm_fail_string,
                      sizeof(prearm_fail_string),
