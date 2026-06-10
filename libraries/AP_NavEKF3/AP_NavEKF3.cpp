@@ -1612,6 +1612,12 @@ bool NavEKF3::configuredToUseGPSForPosXY(void) const
     return sources.getPosXYSource(get_active_source_set()) == AP_NavEKF_Source::SourceXY::GPS;
 }
 
+// check if configured to use GPS for vertical position estimation
+bool NavEKF3::configuredToUseGPSForPosZ(void) const
+{
+    return sources.getPosZSource(get_active_source_set()) == AP_NavEKF_Source::SourceZ::GPS;
+}
+
 bool NavEKF3::configuredForExtNavPosNoVel(void) const
 {
     return (sources.getPosXYSource(get_active_source_set()) == AP_NavEKF_Source::SourceXY::EXTNAV) &&

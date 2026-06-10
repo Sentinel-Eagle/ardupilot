@@ -3464,6 +3464,40 @@ bool AP_AHRS::configured_to_use_gps_for_posxy() const
     return true;
 }
 
+bool AP_AHRS::home_alt_should_use_gps_on_datum_reset() const
+{
+    switch (active_EKF_type()) {
+#if AP_AHRS_DCM_ENABLED
+    case EKFType::DCM:
+        return true;
+#endif
+
+#if HAL_NAVEKF2_AVAILABLE
+    case EKFType::TWO:
+        // EKF2 resetHeightDatum() still aligns the origin to GPS height
+        // whenever GPS is good, regardless of EK2_ALT_SOURCE.
+        return true;
+#endif
+
+#if HAL_NAVEKF3_AVAILABLE
+    case EKFType::THREE:
+        return EKF3.configuredToUseGPSForPosZ();
+#endif
+
+#if AP_AHRS_SIM_ENABLED
+    case EKFType::SIM:
+        return true;
+#endif
+
+#if AP_AHRS_EXTERNAL_ENABLED
+    case EKFType::EXTERNAL:
+        return false;
+#endif
+    }
+
+    return true;
+}
+
 void AP_AHRS::Log_Write()
 {
 #if HAL_NAVEKF2_AVAILABLE

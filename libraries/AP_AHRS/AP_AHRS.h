@@ -425,6 +425,9 @@ public:
     // check if the active horizontal position source is GPS
     bool configured_to_use_gps_for_posxy() const;
 
+    // check if home altitude should be taken from GPS before a height datum reset
+    bool home_alt_should_use_gps_on_datum_reset() const;
+
     void Log_Write();
 
     // check if non-compass sensor is providing yaw.  Allows compass pre-arm checks to be bypassed

@@ -375,16 +375,15 @@ bool NavEKF3_core::resetHeightDatum(void)
     stateStruct.position.z = 0.0f;
     // adjust the height of the EKF origin so that the origin plus baro height before and after the reset is the same
     if (validOrigin) {
-        if (!uses_any_gps_source() || !gpsGoodToAlign) {
+        if (!uses_posz_source(AP_NavEKF_Source::SourceZ::GPS) || !gpsGoodToAlign) {
             // if we don't have GPS lock then we shouldn't be doing a
             // resetHeightDatum, but if we do then the best option is
             // to maintain the old error
             EKF_origin.alt += (int32_t)(100.0f * oldHgt);
         } else {
-            // if we have a good GPS lock then reset to the GPS
-            // altitude. This ensures the reported AMSL alt from
-            // getLLH() is equal to GPS altitude, while also ensuring
-            // that the relative alt is zero
+            // If this lane is configured to use GPS as its vertical
+            // position source, reset to GPS altitude. Horizontal GPS
+            // sources must not pull lane-local height datums to GPS.
             EKF_origin.alt = dal.gps().location().alt;
         }
         ekfGpsRefHgt = (double)0.01 * (double)EKF_origin.alt;
