@@ -726,7 +726,6 @@ void NavEKF3_core::readGpsData()
             gpsDataNew.hgt = 0.01 * (gpsloc.alt - EKF_origin.alt);
         }
         storedGPS.push(gpsDataNew);
-        lastGpsBufferPushTime_ms = gpsDataNew.time_ms;
         // declare GPS in use
         gpsIsInUse = true;
     }
@@ -1087,6 +1086,7 @@ void NavEKF3_core::writeExtNavData(const Vector3f &pos, const Quaternion &quat, 
         return;
     } else {
         extNavMeasTime_ms = timeStamp_ms;
+        lastExtNavPosReceived_ms = imuSampleTime_ms;
     }
 
     ext_nav_elements extNavDataNew {};
@@ -1105,13 +1105,12 @@ void NavEKF3_core::writeExtNavData(const Vector3f &pos, const Quaternion &quat, 
     timeStamp_ms = timeStamp_ms - delay_ms;
     // Correct for the average intersampling delay due to the filter update rate
     timeStamp_ms -= localFilterTimeStep_ms/2;
-    // Prevent time delay exceeding age of oldest IMU data in the buffer
-    timeStamp_ms = MAX(timeStamp_ms, imuDataDelayed.time_ms);
+    // Prevent the time stamp falling outside the oldest and newest IMU data in the buffer
+    timeStamp_ms = MIN(MAX(timeStamp_ms, imuDataDelayed.time_ms), imuSampleTime_ms);
     extNavDataNew.time_ms = timeStamp_ms;
 
     // store position data to buffer
     storedExtNav.push(extNavDataNew);
-    lastExtNavBufferPushTime_ms = extNavDataNew.time_ms;
 
     // protect against attitude or angle being NaN
     if (!quat.is_nan() && !isnan(angErr)) {
@@ -1146,8 +1145,8 @@ void NavEKF3_core::writeExtNavVelData(const Vector3f &vel, float err, uint32_t t
     timeStamp_ms = timeStamp_ms - delay_ms;
     // Correct for the average intersampling delay due to the filter updaterate
     timeStamp_ms -= localFilterTimeStep_ms/2;
-    // Prevent time delay exceeding age of oldest IMU data in the buffer
-    timeStamp_ms = MAX(timeStamp_ms,imuDataDelayed.time_ms);
+    // Prevent the time stamp falling outside the oldest and newest IMU data in the buffer
+    timeStamp_ms = MIN(MAX(timeStamp_ms,imuDataDelayed.time_ms), imuSampleTime_ms);
 
     ext_nav_vel_elements extNavVelNew;
     extNavVelNew.time_ms = timeStamp_ms;

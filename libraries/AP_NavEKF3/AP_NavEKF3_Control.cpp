@@ -6,17 +6,17 @@
 
 #include "AP_DAL/AP_DAL.h"
 
-static bool lane_source_is_fresh_at_fusion_horizon(
-    uint32_t fusion_time_ms,
-    uint32_t sample_time_ms,
+static bool lane_source_is_recent(
+    uint32_t current_time_ms,
+    uint32_t last_update_time_ms,
     int32_t max_age_ms)
 {
-    if (sample_time_ms == 0) {
+    if (last_update_time_ms == 0) {
         return false;
     }
 
-    const int32_t dt_ms = int32_t(fusion_time_ms) - int32_t(sample_time_ms);
-    return dt_ms >= 0 && dt_ms < max_age_ms;
+    const int32_t age_ms = int32_t(current_time_ms) - int32_t(last_update_time_ms);
+    return age_ms >= 0 && age_ms < max_age_ms;
 }
 
 // Control filter mode transitions
@@ -627,18 +627,18 @@ bool NavEKF3_core::readyToUseExtNav(void) const
         return false;
     }
 
-    return tiltAlignComplete && extNavPosFreshAtFusionHorizon();
+    return tiltAlignComplete && extNavPosRecent();
 #else
     return false;
 #endif // EK3_FEATURE_EXTERNAL_NAV
 }
 
-bool NavEKF3_core::extNavPosFreshAtFusionHorizon(void) const
+bool NavEKF3_core::extNavPosRecent(void) const
 {
 #if EK3_FEATURE_EXTERNAL_NAV
-    return lane_source_is_fresh_at_fusion_horizon(
-        imuDataDelayed.time_ms,
-        lastExtNavBufferPushTime_ms,
+    return lane_source_is_recent(
+        imuSampleTime_ms,
+        lastExtNavPosReceived_ms,
         1000);
 #else
     return false;
@@ -652,11 +652,14 @@ bool NavEKF3_core::has_required_posxy_aiding(void) const
         return validOrigin &&
                (delAngBiasLearned || assume_zero_sideslip()) &&
                gpsGoodToAlign &&
-               lane_source_is_fresh_at_fusion_horizon(imuDataDelayed.time_ms, lastGpsBufferPushTime_ms, 300);
+               lane_source_is_recent(
+                   imuSampleTime_ms,
+                   lastTimeGpsReceived_ms,
+                   300);
     case AP_NavEKF_Source::SourceXY::BEACON:
         return readyToUseRangeBeacon();
     case AP_NavEKF_Source::SourceXY::EXTNAV:
-        return extNavPosFreshAtFusionHorizon();
+        return extNavPosRecent();
     case AP_NavEKF_Source::SourceXY::OPTFLOW:
         return readyToUseOptFlow();
     case AP_NavEKF_Source::SourceXY::NONE:
@@ -680,14 +683,17 @@ const char *NavEKF3_core::posxy_aiding_failure_reason(void) const
         if (!gpsGoodToAlign) {
             return "gps quality low";
         }
-        if (!lane_source_is_fresh_at_fusion_horizon(imuDataDelayed.time_ms, lastGpsBufferPushTime_ms, 300)) {
+        if (!lane_source_is_recent(
+                imuSampleTime_ms,
+                lastTimeGpsReceived_ms,
+                300)) {
             return "gps stale";
         }
         return "gps unavailable";
     case AP_NavEKF_Source::SourceXY::BEACON:
         return "range beacon unavailable";
     case AP_NavEKF_Source::SourceXY::EXTNAV:
-        return extNavPosFreshAtFusionHorizon() ? "extnav unavailable" : "extnav stale";
+        return extNavPosRecent() ? "extnav unavailable" : "extnav stale";
     case AP_NavEKF_Source::SourceXY::OPTFLOW:
         return "optflow unavailable";
     case AP_NavEKF_Source::SourceXY::NONE:
@@ -710,10 +716,10 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         return false;
     };
     const auto gps_recent_for_prearm = [&]() -> bool {
-        return imuSampleTime_ms - lastTimeGpsReceived_ms < 500;
+        return lane_source_is_recent(imuSampleTime_ms, lastTimeGpsReceived_ms, 500);
     };
     const auto extnav_recent_for_prearm = [&]() -> bool {
-        return extNavPosFreshAtFusionHorizon();
+        return extNavPosRecent();
     };
     const auto gps_posxy_ready_for_prearm = [&]() -> bool {
         return validOrigin &&
@@ -839,7 +845,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         }
         break;
     case AP_NavEKF_Source::SourceZ::EXTNAV:
-        if (!(tiltAlignComplete && extNavPosFreshAtFusionHorizon())) {
+        if (!(tiltAlignComplete && extNavPosRecent())) {
             return fail("POSZ");
         }
         break;

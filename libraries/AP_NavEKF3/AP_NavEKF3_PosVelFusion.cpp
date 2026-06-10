@@ -550,7 +550,7 @@ void NavEKF3_core::SelectVelPosFusion()
 
 #if EK3_FEATURE_EXTERNAL_NAV
     bool extNavRecoveredAfterLoss = false;
-    const bool extNavPosFresh = extNavPosFreshAtFusionHorizon();
+    const bool extNavPosFresh = extNavPosRecent();
     if (configured_posxy_source == AP_NavEKF_Source::SourceXY::EXTNAV) {
         if (!extNavPosFresh) {
             if (extNavPosAvailableLast) {
@@ -863,7 +863,7 @@ void NavEKF3_core::FuseVelPosNED()
 #if EK3_FEATURE_EXTERNAL_NAV
                     // For EXTNAV position lanes, dead reckon through data outages and only
                     // perform a one-shot position reset when EXTNAV comes back after a loss.
-                    if ((configured_posxy_source == AP_NavEKF_Source::SourceXY::EXTNAV) && !extNavPosFreshAtFusionHorizon()) {
+                    if ((configured_posxy_source == AP_NavEKF_Source::SourceXY::EXTNAV) && !extNavPosRecent()) {
                         fusePosData = false;
                     } else
 #endif // EK3_FEATURE_EXTERNAL_NAV

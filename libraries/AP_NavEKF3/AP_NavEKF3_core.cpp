@@ -275,7 +275,6 @@ void NavEKF3_core::InitialiseVariables()
     lastTasPassTime_ms = 0;
     lastSynthYawTime_ms = 0;
     lastTimeGpsReceived_ms = 0;
-    lastGpsBufferPushTime_ms = 0;
     timeAtLastAuxEKF_ms = imuSampleTime_ms;
     flowValidMeaTime_ms = imuSampleTime_ms;
     rngValidMeaTime_ms = imuSampleTime_ms;
@@ -453,7 +452,7 @@ void NavEKF3_core::InitialiseVariables()
     // external nav data fusion
     extNavDataDelayed = {};
     extNavMeasTime_ms = 0;
-    lastExtNavBufferPushTime_ms = 0;
+    lastExtNavPosReceived_ms = 0;
     extNavLastPosResetTime_ms = 0;
     extNavDataToFuse = false;
     extNavUsedForPos = false;

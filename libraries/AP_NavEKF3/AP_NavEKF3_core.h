@@ -895,7 +895,7 @@ private:
 
     // return true if the filter to be ready to use external nav data
     bool readyToUseExtNav(void) const;
-    bool extNavPosFreshAtFusionHorizon(void) const;
+    bool extNavPosRecent(void) const;
 
     // return true if we should use the range finder sensor
     bool useRngFinder(void) const;
@@ -1135,7 +1135,6 @@ private:
     uint32_t lastTasPassTime_ms;    // time stamp when airspeed measurement last passed innovation consistency check (msec)
     uint32_t lastTasFailTime_ms;    // time stamp when airspeed measurement last failed innovation consistency check (msec)
     uint32_t lastTimeGpsReceived_ms;// last time we received GPS data
-    uint32_t lastGpsBufferPushTime_ms; // timestamp of the last GPS sample pushed into the fusion buffer
     uint32_t timeAtLastAuxEKF_ms;   // last time the auxiliary filter was run to fuse range or optical flow measurements
     uint32_t lastHealthyMagTime_ms; // time the magnetometer was last declared healthy
     bool allMagSensorsFailed;       // true if all magnetometer sensors have timed out on this flight and we are no longer using magnetometer data
@@ -1488,7 +1487,7 @@ private:
     EKF_obs_buffer_t<ext_nav_elements> storedExtNav; // external navigation data buffer
     ext_nav_elements extNavDataDelayed; // External nav at the fusion time horizon
     uint32_t extNavMeasTime_ms;         // time external measurements were accepted for input to the data buffer (msec)
-    uint32_t lastExtNavBufferPushTime_ms; // timestamp of the last EXTNAV position sample pushed into the fusion buffer
+    uint32_t lastExtNavPosReceived_ms;  // time the last EXTNAV position measurement was accepted
     uint32_t extNavLastPosResetTime_ms; // last time the external nav systen performed a position reset (msec)
     bool extNavDataToFuse;              // true when there is new external nav data to fuse
     bool extNavUsedForPos;              // true when the external nav data is being used as a position reference.
