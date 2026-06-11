@@ -6,6 +6,8 @@
 
 #include "AP_DAL/AP_DAL.h"
 
+static const int32_t gps_posxy_aiding_max_age_ms = 400;
+
 static bool lane_source_is_recent(
     uint32_t current_time_ms,
     uint32_t last_update_time_ms,
@@ -655,7 +657,7 @@ bool NavEKF3_core::has_required_posxy_aiding(void) const
                lane_source_is_recent(
                    imuSampleTime_ms,
                    lastTimeGpsReceived_ms,
-                   300);
+                   gps_posxy_aiding_max_age_ms);
     case AP_NavEKF_Source::SourceXY::BEACON:
         return readyToUseRangeBeacon();
     case AP_NavEKF_Source::SourceXY::EXTNAV:
@@ -686,7 +688,7 @@ const char *NavEKF3_core::posxy_aiding_failure_reason(void) const
         if (!lane_source_is_recent(
                 imuSampleTime_ms,
                 lastTimeGpsReceived_ms,
-                300)) {
+                gps_posxy_aiding_max_age_ms)) {
             return "gps stale";
         }
         return "gps unavailable";
