@@ -542,6 +542,7 @@ private:
     bool runCoreSelection;                          // true when the primary core has stabilised and the core selection logic can be started
     bool coreSetupRequired[MAX_EKF_CORES];          // true when this core index needs to be setup
     uint8_t coreImuIndex[MAX_EKF_CORES];            // IMU index used by this core
+    uint32_t coreYawVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the yaw variance gate
     uint32_t corePosVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the pos variance gate
     
     // update the yaw reset data to capture changes due to a lane switch

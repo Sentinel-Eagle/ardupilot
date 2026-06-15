@@ -148,6 +148,13 @@ public:
     bool has_required_posxy_aiding(void) const;
     const char *posxy_aiding_failure_reason(void) const;
 
+    // return true if the configured yaw aiding source for this lane is currently available
+    bool has_required_yaw_aiding(void) const;
+    const char *yaw_aiding_failure_reason(void) const;
+
+    // return true if the yaw innovation tests are within the normal acceptance limit
+    bool has_acceptable_yaw_variance(void) const;
+
     // return true if the horizontal position innovation test is within the normal acceptance limit
     bool has_acceptable_posxy_variance(void) const;
 

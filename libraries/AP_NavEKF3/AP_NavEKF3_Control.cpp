@@ -672,6 +672,78 @@ bool NavEKF3_core::has_required_posxy_aiding(void) const
     return true;
 }
 
+bool NavEKF3_core::has_required_yaw_aiding(void) const
+{
+    switch (yaw_source()) {
+    case AP_NavEKF_Source::SourceYaw::NONE:
+        return true;
+    case AP_NavEKF_Source::SourceYaw::COMPASS:
+        return use_compass() && !magTimeout;
+    case AP_NavEKF_Source::SourceYaw::GPS:
+        return using_noncompass_for_yaw();
+    case AP_NavEKF_Source::SourceYaw::GPS_COMPASS_FALLBACK:
+        return using_noncompass_for_yaw() ||
+               (gps_yaw_mag_fallback_active && use_compass() && !magTimeout);
+    case AP_NavEKF_Source::SourceYaw::EXTNAV:
+        return using_extnav_for_yaw();
+    case AP_NavEKF_Source::SourceYaw::GSF:
+        return using_noncompass_for_yaw();
+    }
+
+    return true;
+}
+
+const char *NavEKF3_core::yaw_aiding_failure_reason(void) const
+{
+    switch (yaw_source()) {
+    case AP_NavEKF_Source::SourceYaw::NONE:
+        return "yaw unavailable";
+    case AP_NavEKF_Source::SourceYaw::COMPASS:
+        return magTimeout ? "compass stale" : "compass unavailable";
+    case AP_NavEKF_Source::SourceYaw::GPS:
+        return "gps yaw stale";
+    case AP_NavEKF_Source::SourceYaw::GPS_COMPASS_FALLBACK:
+        if (gps_yaw_mag_fallback_active) {
+            return magTimeout ? "compass stale" : "compass unavailable";
+        }
+        return "gps yaw stale";
+    case AP_NavEKF_Source::SourceYaw::EXTNAV:
+        return "extnav yaw stale";
+    case AP_NavEKF_Source::SourceYaw::GSF:
+        return "gsf yaw unavailable";
+    }
+
+    return "yaw unavailable";
+}
+
+bool NavEKF3_core::has_acceptable_yaw_variance(void) const
+{
+    const auto compass_yaw_variance_ok = [&]() {
+        return !magTimeout &&
+               yawTestRatio < 1.0f &&
+               magTestRatio.x < 1.0f &&
+               magTestRatio.y < 1.0f &&
+               magTestRatio.z < 1.0f;
+    };
+
+    switch (yaw_source()) {
+    case AP_NavEKF_Source::SourceYaw::NONE:
+        return true;
+    case AP_NavEKF_Source::SourceYaw::COMPASS:
+        return compass_yaw_variance_ok();
+    case AP_NavEKF_Source::SourceYaw::GPS:
+        return true;
+    case AP_NavEKF_Source::SourceYaw::GPS_COMPASS_FALLBACK:
+        return !gps_yaw_mag_fallback_active || compass_yaw_variance_ok();
+    case AP_NavEKF_Source::SourceYaw::EXTNAV:
+        return true;
+    case AP_NavEKF_Source::SourceYaw::GSF:
+        return true;
+    }
+
+    return true;
+}
+
 const char *NavEKF3_core::posxy_aiding_failure_reason(void) const
 {
     switch (posxy_source()) {

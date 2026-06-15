@@ -17,8 +17,10 @@ enum class LaneBlockReason : uint8_t {
     UNHEALTHY = 1,
     TILT_UNALIGNED = 2,
     YAW_UNALIGNED = 3,
-    LOST_POS_AIDING = 4,
-    POS_VARIANCE_HIGH = 5,
+    LOST_YAW_AIDING = 4,
+    YAW_VARIANCE_HIGH = 5,
+    LOST_POS_AIDING = 6,
+    POS_VARIANCE_HIGH = 7,
 };
 
 static bool core_is_primary_eligible(const NavEKF3_core &candidate)
@@ -26,6 +28,8 @@ static bool core_is_primary_eligible(const NavEKF3_core &candidate)
     return candidate.healthy() &&
            candidate.have_aligned_tilt() &&
            candidate.have_aligned_yaw() &&
+           candidate.has_required_yaw_aiding() &&
+           candidate.has_acceptable_yaw_variance() &&
            candidate.has_required_posxy_aiding() &&
            candidate.has_acceptable_posxy_variance();
 }
@@ -40,6 +44,12 @@ static LaneBlockReason lane_block_reason_id(const NavEKF3_core &candidate)
     }
     if (!candidate.have_aligned_yaw()) {
         return LaneBlockReason::YAW_UNALIGNED;
+    }
+    if (!candidate.has_required_yaw_aiding()) {
+        return LaneBlockReason::LOST_YAW_AIDING;
+    }
+    if (!candidate.has_acceptable_yaw_variance()) {
+        return LaneBlockReason::YAW_VARIANCE_HIGH;
     }
     if (!candidate.has_required_posxy_aiding()) {
         return LaneBlockReason::LOST_POS_AIDING;
@@ -59,6 +69,10 @@ static const char *lane_block_reason(const NavEKF3_core &candidate)
         return "tilt unaligned";
     case LaneBlockReason::YAW_UNALIGNED:
         return "yaw unaligned";
+    case LaneBlockReason::LOST_YAW_AIDING:
+        return candidate.yaw_aiding_failure_reason();
+    case LaneBlockReason::YAW_VARIANCE_HIGH:
+        return "yaw variance high";
     case LaneBlockReason::LOST_POS_AIDING:
         return candidate.posxy_aiding_failure_reason();
     case LaneBlockReason::POS_VARIANCE_HIGH:
@@ -113,11 +127,14 @@ uint8_t NavEKF3::desired_primary_core(void) const
 
     const uint32_t now_ms = AP::dal().millis();
     for (uint8_t core_index = 0; core_index < num_cores; core_index++) {
-        const uint32_t stable_since_ms = corePosVarAcceptSince_ms[core_index];
+        const uint32_t yaw_stable_since_ms = coreYawVarAcceptSince_ms[core_index];
+        const uint32_t pos_stable_since_ms = corePosVarAcceptSince_ms[core_index];
+        const bool has_stable_yaw_variance =
+            yaw_stable_since_ms != 0 && now_ms - yaw_stable_since_ms >= 5000;
         const bool has_stable_posxy_variance =
-            stable_since_ms != 0 && now_ms - stable_since_ms >= 5000;
+            pos_stable_since_ms != 0 && now_ms - pos_stable_since_ms >= 5000;
         if (core_is_primary_eligible(core[core_index]) &&
-            (core_index == primary || has_stable_posxy_variance)) {
+            (core_index == primary || (has_stable_yaw_variance && has_stable_posxy_variance))) {
             return core_index;
         }
     }
@@ -910,6 +927,8 @@ bool NavEKF3::InitialiseFilter(void)
         for (uint8_t i=0; i<MAX_EKF_CORES; i++) {
             coreSetupRequired[i] = false;
             coreImuIndex[i] = 0;
+            coreYawVarAcceptSince_ms[i] = 0;
+            corePosVarAcceptSince_ms[i] = 0;
         }
         num_cores = 0;
 
@@ -1007,6 +1026,14 @@ void NavEKF3::UpdateFilter(void)
 
     const uint32_t now_ms = AP::dal().millis();
     for (uint8_t i = 0; i < num_cores; i++) {
+        if (core[i].has_acceptable_yaw_variance()) {
+            if (coreYawVarAcceptSince_ms[i] == 0) {
+                coreYawVarAcceptSince_ms[i] = now_ms;
+            }
+        } else {
+            coreYawVarAcceptSince_ms[i] = 0;
+        }
+
         if (core[i].has_acceptable_posxy_variance()) {
             if (corePosVarAcceptSince_ms[i] == 0) {
                 corePosVarAcceptSince_ms[i] = now_ms;
