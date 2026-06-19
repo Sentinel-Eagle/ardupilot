@@ -161,6 +161,10 @@ public:
     // return true if all configured sources for this lane are ready for use during pre-arm checks
     bool configured_sources_ready(char *failure_msg, uint8_t failure_msg_len) const;
 
+    bool has_absolute_horizontal_position_source(void) const;
+    bool has_imu_only_horizontal_position_source(void) const;
+    bool align_horizontal_position_to(const NavEKF3_core &source_core);
+
     // Return a consolidated error score where higher numbers are less healthy
     // Intended to be used by the front-end to determine which is the primary EKF
     float errorScore(void) const;

@@ -381,6 +381,8 @@ private:
     uint8_t last_forced_primary_refused_reason = UINT8_MAX;
     uint8_t last_forced_primary_bad_lane = UINT8_MAX;
     uint8_t last_forced_primary_bad_reason = UINT8_MAX;
+    uint8_t last_auto_primary_bad_lane = UINT8_MAX;
+    uint8_t last_auto_primary_bad_reason = UINT8_MAX;
 
     uint32_t _frameTimeUsec;        // time per IMU frame
     uint8_t  _framesPerPrediction;  // expected number of IMU frames per prediction
@@ -559,6 +561,7 @@ private:
     // new_primary - index of the ekf instance that we are about to switch to as the primary
     // old_primary - index of the ekf instance that we are currently using as the primary
     void updateLaneSwitchPosDownResetData(uint8_t new_primary, uint8_t old_primary);
+    void alignLaneSwitchPositionIfNeeded(uint8_t new_primary, uint8_t old_primary);
 
     bool primary_core_is_forced(void) const;
     uint8_t forced_primary_core(void) const;

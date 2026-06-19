@@ -1065,6 +1065,7 @@ void NavEKF3::UpdateFilter(void)
 
     if (newPrimaryIndex != primary) {
         const uint8_t oldPrimaryIndex = primary;
+        alignLaneSwitchPositionIfNeeded(newPrimaryIndex, primary);
         updateLaneSwitchYawResetData(newPrimaryIndex, primary);
         updateLaneSwitchPosResetData(newPrimaryIndex, primary);
         updateLaneSwitchPosDownResetData(newPrimaryIndex, primary);
@@ -1079,6 +1080,9 @@ void NavEKF3::UpdateFilter(void)
     }
 
     if (primary_core_is_forced()) {
+        last_auto_primary_bad_lane = UINT8_MAX;
+        last_auto_primary_bad_reason = UINT8_MAX;
+
         const uint8_t forced_primary = forced_primary_core();
         if (forced_primary >= num_cores) {
             if (last_forced_primary_invalid_lane != forced_primary) {
@@ -1139,6 +1143,35 @@ void NavEKF3::UpdateFilter(void)
         last_forced_primary_refused_reason = UINT8_MAX;
         last_forced_primary_bad_lane = UINT8_MAX;
         last_forced_primary_bad_reason = UINT8_MAX;
+
+        bool any_lane_eligible = false;
+        for (uint8_t i = 0; i < num_cores; i++) {
+            if (core_is_primary_eligible(core[i])) {
+                any_lane_eligible = true;
+                break;
+            }
+        }
+
+        if (!any_lane_eligible) {
+            const uint8_t bad_lane = primary < num_cores ? primary : 0;
+            const uint8_t bad_reason = uint8_t(lane_block_reason_id(core[bad_lane]));
+            if (last_auto_primary_bad_lane != bad_lane ||
+                last_auto_primary_bad_reason != bad_reason) {
+                GCS_SEND_TEXT(
+                    MAV_SEVERITY_WARNING,
+                    "EKF3 lanes bad: %u %s",
+                    (unsigned)bad_lane,
+                    lane_block_reason(core[bad_lane]));
+                last_auto_primary_bad_lane = bad_lane;
+                last_auto_primary_bad_reason = bad_reason;
+            }
+        } else if (last_auto_primary_bad_lane != UINT8_MAX) {
+            GCS_SEND_TEXT(
+                MAV_SEVERITY_INFO,
+                "EKF3 lanes recovered");
+            last_auto_primary_bad_lane = UINT8_MAX;
+            last_auto_primary_bad_reason = UINT8_MAX;
+        }
     }
 
     if (sources.get_active_source_set() != get_active_source_set()) {
@@ -1171,6 +1204,7 @@ void NavEKF3::checkLaneSwitch(void)
     // update the yaw and position reset data to capture changes due to the lane switch
     if (newPrimaryIndex != primary) {
         const uint8_t oldPrimaryIndex = primary;
+        alignLaneSwitchPositionIfNeeded(newPrimaryIndex, primary);
         updateLaneSwitchYawResetData(newPrimaryIndex, primary);
         updateLaneSwitchPosResetData(newPrimaryIndex, primary);
         updateLaneSwitchPosDownResetData(newPrimaryIndex, primary);
@@ -2111,6 +2145,22 @@ void NavEKF3::updateLaneSwitchYawResetData(uint8_t new_primary, uint8_t old_prim
     yaw_reset_data.last_primary_change = imuSampleTime_us / 1000;
     yaw_reset_data.core_changed = true;
 
+}
+
+void NavEKF3::alignLaneSwitchPositionIfNeeded(uint8_t new_primary, uint8_t old_primary)
+{
+    if (!core[old_primary].has_absolute_horizontal_position_source() ||
+        !core[new_primary].has_imu_only_horizontal_position_source()) {
+        return;
+    }
+
+    if (core[new_primary].align_horizontal_position_to(core[old_primary])) {
+        GCS_SEND_TEXT(
+            MAV_SEVERITY_INFO,
+            "EKF3 lane %u copied pos from %u",
+            (unsigned)new_primary,
+            (unsigned)old_primary);
+    }
 }
 
 // update the position reset data to capture changes due to a lane switch

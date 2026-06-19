@@ -77,6 +77,48 @@ AP_NavEKF_Source::SourceYaw NavEKF3_core::yaw_source(void) const
     return frontend->sources.getYawSource(source_set_index());
 }
 
+bool NavEKF3_core::has_absolute_horizontal_position_source(void) const
+{
+    switch (posxy_source()) {
+    case AP_NavEKF_Source::SourceXY::GPS:
+    case AP_NavEKF_Source::SourceXY::BEACON:
+    case AP_NavEKF_Source::SourceXY::EXTNAV:
+        return true;
+    case AP_NavEKF_Source::SourceXY::NONE:
+    case AP_NavEKF_Source::SourceXY::OPTFLOW:
+    case AP_NavEKF_Source::SourceXY::WHEEL_ENCODER:
+        return false;
+    }
+    return false;
+}
+
+bool NavEKF3_core::has_imu_only_horizontal_position_source(void) const
+{
+    return posxy_source() == AP_NavEKF_Source::SourceXY::NONE &&
+           frontend->sources.getVelXYSource(source_set_index()) == AP_NavEKF_Source::SourceXY::NONE;
+}
+
+bool NavEKF3_core::align_horizontal_position_to(const NavEKF3_core &source_core)
+{
+    if (!source_core.validOrigin) {
+        return false;
+    }
+
+    Location source_loc = source_core.EKF_origin;
+    source_loc.offset(source_core.outputDataNew.position.x + source_core.posOffsetNED.x,
+                      source_core.outputDataNew.position.y + source_core.posOffsetNED.y);
+    if (!validOrigin && !setOriginLLH(source_loc)) {
+        return false;
+    }
+
+    const Vector2F pos_ne = EKF_origin.get_distance_NE_ftype(source_loc);
+    ResetPositionNE(pos_ne.x - posOffsetNED.x, pos_ne.y - posOffsetNED.y);
+    lastKnownPositionNE.x = stateStruct.position.x;
+    lastKnownPositionNE.y = stateStruct.position.y;
+
+    return true;
+}
+
 // setup this core backend
 bool NavEKF3_core::setup_core(uint8_t _imu_index, uint8_t _core_index)
 {
