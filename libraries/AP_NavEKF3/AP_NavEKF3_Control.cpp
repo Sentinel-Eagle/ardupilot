@@ -641,7 +641,7 @@ bool NavEKF3_core::extNavPosRecent(void) const
     return lane_source_is_recent(
         imuSampleTime_ms,
         lastExtNavPosReceived_ms,
-        1000);
+        3000);
 #else
     return false;
 #endif // EK3_FEATURE_EXTERNAL_NAV
