@@ -107,12 +107,19 @@ bool NavEKF3_core::align_horizontal_position_to(const NavEKF3_core &source_core)
     Location source_loc = source_core.EKF_origin;
     source_loc.offset(source_core.outputDataNew.position.x + source_core.posOffsetNED.x,
                       source_core.outputDataNew.position.y + source_core.posOffsetNED.y);
-    if (!validOrigin && !setOriginLLH(source_loc)) {
+    // Initialise with source's EKF_origin (not the vehicle's current location) so that
+    // EKF_origin, outputPosFrameOffsetNE, and therefore ORGN remain identical to the
+    // source lane across the switch.
+    if (!validOrigin && !setOriginLLH(source_core.EKF_origin)) {
         return false;
     }
+    // Align the lane-local origin with the source so that getLLH() and getPosNE() stay in
+    // the same reference frame as the source lane (ORGN must not jump on a lane switch).
+    EKF_origin = source_core.EKF_origin;
 
     const Vector2F pos_ne = EKF_origin.get_distance_NE_ftype(source_loc);
     ResetPositionNE(pos_ne.x - posOffsetNED.x, pos_ne.y - posOffsetNED.y);
+    outputPosFrameOffsetNE = source_core.outputPosFrameOffsetNE;
     lastKnownPositionNE.x = stateStruct.position.x;
     lastKnownPositionNE.y = stateStruct.position.y;
 
