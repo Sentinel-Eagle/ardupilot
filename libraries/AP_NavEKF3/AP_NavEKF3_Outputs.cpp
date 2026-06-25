@@ -330,7 +330,8 @@ bool NavEKF3_core::getLLH(Location &loc) const
     Location origin;
     if (getOriginLLH(origin)) {
         float posD;
-        if (getPosD_local(posD) && PV_AidingMode != AID_NONE) {
+        const bool have_vert = getPosD_local(posD);
+        if (have_vert && PV_AidingMode != AID_NONE) {
             // Altitude returned is an absolute altitude relative to the WGS-84 spherioid
             loc.set_alt_cm(origin.alt - posD*100.0, Location::AltFrame::ABSOLUTE);
             if (filterStatus.flags.horiz_pos_abs || filterStatus.flags.horiz_pos_rel) {
@@ -349,14 +350,22 @@ bool NavEKF3_core::getLLH(Location &loc) const
                 return false;
             }
         } else {
-            // No valid fused vertical position: report the lane-local drifting
-            // state rather than freezing at the last known point.
+            // Report the lane-local drifting state rather than freezing at the last known point.
             loc.lat = EKF_origin.lat;
             loc.lng = EKF_origin.lng;
             loc.offset(outputDataNew.position.x + posOffsetNED.x,
                        outputDataNew.position.y + posOffsetNED.y);
-            loc.alt = EKF_origin.alt - lastKnownPositionD*100.0;
-            return false;
+            if (have_vert) {
+                loc.set_alt_cm(origin.alt - posD*100.0, Location::AltFrame::ABSOLUTE);
+            } else {
+                loc.alt = EKF_origin.alt - lastKnownPositionD*100.0;
+            }
+            // In AID_NONE (IMU-only) mode the lane was aligned to the source lane's
+            // position before the switch. Return true so that callers (ArduPlane AHRS in
+            // particular) don't fall back to GPS/DCM and produce a position jump.
+            // Callers can check getFilterStatus() to detect dead-reckoning
+            // (horiz_pos_abs=0, horiz_pos_rel=0, const_pos_mode=1).
+            return have_vert && PV_AidingMode == AID_NONE;
         }
     } else {
         return false;
