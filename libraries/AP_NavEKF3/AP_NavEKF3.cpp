@@ -135,6 +135,13 @@ uint8_t NavEKF3::desired_primary_core(void) const
             pos_stable_since_ms != 0 && now_ms - pos_stable_since_ms >= 5000;
         if (core_is_primary_eligible(core[core_index]) &&
             (core_index == primary || (has_stable_yaw_variance && has_stable_posxy_variance))) {
+            // Suppress switching away from the current primary when its NE position
+            // covariance is still low — the EKF state is fine despite a momentary
+            // measurement rejection that temporarily failed core_is_primary_eligible.
+            if (core_index != primary && primary < num_cores &&
+                core[primary].get_pos_variance_NE() < NavEKF3_core::lane_pos_var_threshold) {
+                continue;
+            }
             return core_index;
         }
     }

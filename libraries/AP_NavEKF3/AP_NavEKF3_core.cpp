@@ -119,6 +119,27 @@ bool NavEKF3_core::align_horizontal_position_to(const NavEKF3_core &source_core)
 
     const Vector2F pos_ne = EKF_origin.get_distance_NE_ftype(source_loc);
     ResetPositionNE(pos_ne.x - posOffsetNED.x, pos_ne.y - posOffsetNED.y);
+
+    // ResetPositionNE shifts both stateStruct and outputDataNew by the same delta, so the
+    // output-predictor lag (outputDataNew − stateStruct ≈ velocity × maxDelay) is preserved.
+    // For an IMU-only lane this lag is the drifted velocity integrated over the buffer depth
+    // (~260 ms), which appears as a 1–4 m position jump in getPosNE()/getLLH() right after
+    // the switch. Subtract it from the entire output buffer now.
+    const ftype lag_x = outputDataNew.position.x - stateStruct.position.x;
+    const ftype lag_y = outputDataNew.position.y - stateStruct.position.y;
+    for (uint8_t i = 0; i < imu_buffer_length; i++) {
+        storedOutput[i].position.x -= lag_x;
+        storedOutput[i].position.y -= lag_y;
+    }
+    outputDataNew.position.x -= lag_x;
+    outputDataNew.position.y -= lag_y;
+    outputDataDelayed.position.x -= lag_x;
+    outputDataDelayed.position.y -= lag_y;
+    // The PI integral was tracking the old lag; zero it so it doesn't push outputDataNew
+    // away from the freshly aligned position on the next EKF cycle.
+    posErrintegral.x = 0.0f;
+    posErrintegral.y = 0.0f;
+
     outputPosFrameOffsetNE = source_core.outputPosFrameOffsetNE;
     lastKnownPositionNE.x = stateStruct.position.x;
     lastKnownPositionNE.y = stateStruct.position.y;

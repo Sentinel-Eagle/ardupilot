@@ -783,6 +783,11 @@ bool NavEKF3_core::has_acceptable_posxy_variance(void) const
     return posTestRatio < 1.0f;
 }
 
+float NavEKF3_core::get_pos_variance_NE(void) const
+{
+    return static_cast<float>(P[7][7]+P[8][8]);
+}
+
 bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_msg_len) const
 {
     const auto fail = [&](const char *field_name) -> bool {
