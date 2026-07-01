@@ -161,12 +161,10 @@ public:
     // P[7][7]+P[8][8]: NE position state variance (m²), used by lane-selection logic
     float get_pos_variance_NE(void) const;
 
-    // desired_primary_core() suppresses demotion of the current primary when its NE
-    // position covariance is below this value — meaning the EKF state is still good
-    // despite a momentary measurement rejection (posTestRatio >= 1). Calibrated against
-    // all available flight logs: highest spurious-switch P = 1.14 m², lowest
-    // genuine-failure P = 2.08 m².
-    static constexpr float lane_pos_var_threshold = 2.0f;
+    // desired_primary_core() suppresses demotion of the current primary when its
+    // NE position variance (P[7][7]+P[8][8]) above which a lane is considered ineligible
+    // as primary. Set above p95 of nominal operating range across few last flights (~3.2 m²).
+    static constexpr float lane_pos_var_threshold = 5.0f;
 
     // return true if all configured sources for this lane are ready for use during pre-arm checks
     bool configured_sources_ready(char *failure_msg, uint8_t failure_msg_len) const;

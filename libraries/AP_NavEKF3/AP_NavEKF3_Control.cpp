@@ -780,7 +780,10 @@ const char *NavEKF3_core::posxy_aiding_failure_reason(void) const
 
 bool NavEKF3_core::has_acceptable_posxy_variance(void) const
 {
-    return posTestRatio < 1.0f;
+    if (PV_AidingMode == AID_NONE) {
+        return true;
+    }
+    return get_pos_variance_NE() < lane_pos_var_threshold;
 }
 
 float NavEKF3_core::get_pos_variance_NE(void) const
