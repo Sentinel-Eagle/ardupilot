@@ -133,20 +133,12 @@ uint8_t NavEKF3::desired_primary_core(void) const
             yaw_stable_since_ms != 0 && now_ms - yaw_stable_since_ms >= 5000;
         const bool has_stable_posxy_variance =
             pos_stable_since_ms != 0 && now_ms - pos_stable_since_ms >= 5000;
+        // Source sets are preference ordered, so the lowest eligible lane always
+        // wins. A lane other than the current primary must also hold acceptable
+        // variances for the full stability window before it can be selected,
+        // which damps switching on sources that flap.
         if (core_is_primary_eligible(core[core_index]) &&
             (core_index == primary || (has_stable_yaw_variance && has_stable_posxy_variance))) {
-            // Suppress switching away from the current primary when it is fully
-            // eligible and its NE position covariance is below the lane threshold -
-            // a lower-indexed lane becoming eligible is not by itself a reason to
-            // demote a healthy primary. The guard must not fire for an ineligible
-            // primary (unhealthy, lost aiding, unaligned): position covariance is
-            // re-seeded small by every position reset, so a small P is no evidence
-            // of health, and riding a broken primary blocks failover entirely.
-            if (core_index != primary && primary < num_cores &&
-                core_is_primary_eligible(core[primary]) &&
-                core[primary].get_pos_variance_NE() < NavEKF3_core::lane_pos_var_threshold) {
-                continue;
-            }
             return core_index;
         }
     }
