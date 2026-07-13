@@ -135,12 +135,15 @@ uint8_t NavEKF3::desired_primary_core(void) const
             pos_stable_since_ms != 0 && now_ms - pos_stable_since_ms >= 5000;
         if (core_is_primary_eligible(core[core_index]) &&
             (core_index == primary || (has_stable_yaw_variance && has_stable_posxy_variance))) {
-            // Suppress switching away from the current primary when its NE position
-            // covariance is still below the lane threshold — the EKF state is healthy
-            // despite a momentary eligibility failure (posxy variance, yaw variance,
-            // brief source timeout, etc.).  The switch fires naturally once P grows
-            // past lane_pos_var_threshold, indicating genuine EKF degradation.
+            // Suppress switching away from the current primary when it is fully
+            // eligible and its NE position covariance is below the lane threshold -
+            // a lower-indexed lane becoming eligible is not by itself a reason to
+            // demote a healthy primary. The guard must not fire for an ineligible
+            // primary (unhealthy, lost aiding, unaligned): position covariance is
+            // re-seeded small by every position reset, so a small P is no evidence
+            // of health, and riding a broken primary blocks failover entirely.
             if (core_index != primary && primary < num_cores &&
+                core_is_primary_eligible(core[primary]) &&
                 core[primary].get_pos_variance_NE() < NavEKF3_core::lane_pos_var_threshold) {
                 continue;
             }
@@ -1048,6 +1051,19 @@ void NavEKF3::UpdateFilter(void)
                 corePosVarAcceptSince_ms[i] = now_ms;
             }
         } else {
+            corePosVarAcceptSince_ms[i] = 0;
+        }
+
+        // A position reset re-seeds the position covariance, so a small P right
+        // after a reset is no evidence of a stable estimate (GPS resets seed P
+        // well below lane_pos_var_threshold while the position may have jumped
+        // onto a bad fix). Restart the stability window so a freshly-reset lane
+        // must prove itself for the full window before it can be switched to.
+        Vector2f posResetDelta;
+        const uint32_t lastPosResetTime_ms = core[i].getLastPosNorthEastReset(posResetDelta);
+        if (lastPosResetTime_ms != 0 &&
+            corePosVarAcceptSince_ms[i] != 0 &&
+            lastPosResetTime_ms >= corePosVarAcceptSince_ms[i]) {
             corePosVarAcceptSince_ms[i] = 0;
         }
     }

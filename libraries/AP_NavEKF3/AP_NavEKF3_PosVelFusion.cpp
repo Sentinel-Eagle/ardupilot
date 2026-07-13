@@ -859,6 +859,25 @@ void NavEKF3_core::FuseVelPosNED()
                 // if velocity drift is being constrained, dont reset until gps passes quality checks
                 const bool posVarianceIsTooLarge = (frontend->_gpsGlitchRadiusMax > 0) && (P[8][8] + P[7][7]) > sq(ftype(frontend->_gpsGlitchRadiusMax));
                 if (posTimeout || posVarianceIsTooLarge) {
+                    // Hold off hard-resetting onto a GPS fix that is failing the
+                    // receiver-side quality checks (degraded reacquisition after a
+                    // glitch or jamming) and dead-reckon instead, but only for up to
+                    // 5 seconds so the lane can still recover if GPS quality never
+                    // returns. Innovation-based checks are deliberately not part of
+                    // the veto: innovations fail whenever a reset is needed, whether
+                    // or not GPS is at fault.
+                    bool holdoffGpsReset = false;
+                    if (configured_posxy_source == AP_NavEKF_Source::SourceXY::GPS &&
+                        !(gpsGoodToAlign && gpsSpdAccPass)) {
+                        if (posResetVetoStart_ms == 0 ||
+                            imuSampleTime_ms - posResetVetoLast_ms > 1000) {
+                            posResetVetoStart_ms = imuSampleTime_ms;
+                        }
+                        posResetVetoLast_ms = imuSampleTime_ms;
+                        holdoffGpsReset = imuSampleTime_ms - posResetVetoStart_ms < 5000;
+                    } else {
+                        posResetVetoStart_ms = 0;
+                    }
 #if EK3_FEATURE_EXTERNAL_NAV
                     // For EXTNAV position lanes, dead reckon through data outages and only
                     // perform a one-shot position reset when EXTNAV comes back after a loss.
@@ -866,6 +885,10 @@ void NavEKF3_core::FuseVelPosNED()
                         fusePosData = false;
                     } else
 #endif // EK3_FEATURE_EXTERNAL_NAV
+                    if (holdoffGpsReset) {
+                        // dead-reckon rather than adopting an un-vetted fix
+                        fusePosData = false;
+                    } else
                     {
                     // reset the position to the current external sensor position
                     ResetPosition(resetDataSource::DEFAULT);

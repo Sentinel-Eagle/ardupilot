@@ -357,6 +357,8 @@ void NavEKF3_core::InitialiseVariables()
     timeTasReceived_ms = 0;
     lastPreAlignGpsCheckTime_ms = imuSampleTime_ms;
     lastPosReset_ms = 0;
+    posResetVetoStart_ms = 0;
+    posResetVetoLast_ms = 0;
     lastVelReset_ms = 0;
     lastPosResetD_ms = 0;
     lastRngMeasTime_ms = 0;
@@ -865,6 +867,15 @@ void NavEKF3_core::UpdateFilter(bool predict)
         dal.millis() - last_filter_ok_ms > 5000 &&
         !dal.get_armed()) {
         // we've been unhealthy for 5 seconds after being healthy, reset the filter
+        // Note: this is the only path that can clear validOrigin after startup
+        // (via InitialiseVariables), and it is disarmed-only - so lane origins
+        // are immutable for the whole armed period. If this fires on the ground
+        // away from the takeoff point without a reboot, a GPS lane re-seeds its
+        // origin at the current location and lane origins diverge. A subsequent
+        // lane switch then carries that divergence as a position-offset that the
+        // controller slews out. Accepted: this reset is already loud (warning
+        // above) and re-fanning origins across lanes was deliberately removed
+        // (see "don't propagate gps origin").
         GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "EKF3 IMU%u forced reset",(unsigned)imu_index);
         last_filter_ok_ms = 0;
         statesInitialised = false;

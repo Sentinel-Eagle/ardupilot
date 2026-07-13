@@ -360,11 +360,25 @@ bool NavEKF3_core::getLLH(Location &loc) const
             } else {
                 loc.alt = EKF_origin.alt - lastKnownPositionD*100.0;
             }
-            // In AID_NONE (IMU-only) mode the lane was aligned to the source lane's
-            // position before the switch. Return true so that callers (ArduPlane AHRS in
-            // particular) don't fall back to GPS/DCM and produce a position jump.
-            // Callers can check getFilterStatus() to detect dead-reckoning
-            // (horiz_pos_abs=0, horiz_pos_rel=0, const_pos_mode=1).
+            // Contract deviation from upstream, deliberate: return true while
+            // dead-reckoning in AID_NONE (IMU-only) mode, where upstream returns
+            // false. This mode is the last-resort path entered when all aiding
+            // sources are lost, and the lane was aligned to the source lane's
+            // position before the switch, so the drift starts from a good fix.
+            // Returning false would make AP_AHRS::_get_location() silently swap
+            // consumers to the DCM fallback - but DCM's position is GPS-driven
+            // and GPS is unavailable in exactly this scenario, so the swap would
+            // trade a continuous best-available estimate for an equally invalid
+            // source plus a mid-flight discontinuity (which on Plane feeds
+            // L1/TECS navigation directly).
+            //
+            // Accepted consequence: consumers that trust this bool as "position
+            // is trustworthy" (fence breach checks, geotagging, terrain lookups,
+            // GCS position display) treat an unboundedly drifting estimate as
+            // valid. Safety gates are unaffected: position_ok() and the EKF
+            // failsafe read the nav_filter_status flags, which correctly report
+            // dead-reckoning here (horiz_pos_abs=0, horiz_pos_rel=0,
+            // const_pos_mode=1).
             return have_vert && PV_AidingMode == AID_NONE;
         }
     } else {
@@ -399,6 +413,14 @@ bool NavEKF3_core::getOriginLLH(Location &loc) const
 {
     if (validOrigin) {
         loc = EKF_origin;
+        // getPosNE() reports positions in the frame from before any
+        // moveEKFOrigin() moves (outputPosFrameOffsetNE accumulates them), so
+        // un-move the reported origin by the same amount. Without this,
+        // Location->NE conversions done against the reported origin (waypoints,
+        // guided targets, RTL) are displaced from getPosNE() positions by the
+        // accumulated origin movement. Invariant: getOriginLLH() + getPosNE()
+        // == getLLH() == true position.
+        loc.offset(-outputPosFrameOffsetNE.x, -outputPosFrameOffsetNE.y);
         // report internally corrected reference height if enabled
         if ((frontend->_originHgtMode & (1<<2)) == 0) {
             loc.alt = (int32_t)(100.0f * (float)ekfGpsRefHgt);

@@ -1234,6 +1234,8 @@ private:
     bool lastMagOffsetsValid;       // True when lastMagOffsets has been initialized
     Vector2F posResetNE;            // Change in North/East position due to last in-flight reset in metres. Returned by getLastPosNorthEastReset
     uint32_t lastPosReset_ms;       // System time at which the last position reset occurred. Returned by getLastPosNorthEastReset
+    uint32_t posResetVetoStart_ms;  // Time the hold-off of a position reset onto an un-vetted GPS fix started. 0 when inactive
+    uint32_t posResetVetoLast_ms;   // Last time the un-vetted GPS reset hold-off was evaluated, used to restart the window after gaps
     Vector2F velResetNE;            // Change in North/East velocity due to last in-flight reset in metres/sec. Returned by getLastVelNorthEastReset
     uint32_t lastVelReset_ms;       // System time at which the last velocity reset occurred. Returned by getLastVelNorthEastReset
     ftype posResetD;                // Change in Down position due to last in-flight reset in metres. Returned by getLastPosDowntReset
