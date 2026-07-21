@@ -161,10 +161,19 @@ public:
     // P[7][7]+P[8][8]: NE position state variance (m²), used by lane-selection logic
     float get_pos_variance_NE(void) const;
 
-    // desired_primary_core() suppresses demotion of the current primary when its
-    // NE position variance (P[7][7]+P[8][8]) above which a lane is considered ineligible
-    // as primary. Set above p95 of nominal operating range across few last flights (~3.2 m²).
-    static constexpr float lane_pos_var_threshold = 5.0f;
+    // Maximum NE position state variance (P[7][7]+P[8][8]) above which a lane is
+    // considered ineligible as primary. The EKF's steady-state position variance
+    // scales with the square of aiding-source position error, which for a camera/
+    // vision-based ext-nav source scales with altitude (ground sample distance
+    // grows ~linearly with height, so its variance grows ~with height squared) -
+    // confirmed empirically on a real climb/descent (P[7][7]+P[8][8] vs altitude,
+    // exponent ~2.0, R^2=0.94). lane_pos_var_threshold_base was calibrated against
+    // nominal operating P (~3.2 m² p95) at lane_pos_var_threshold_ref_alt_m; scale
+    // quadratically with this lane's own current altitude so the same margin holds
+    // at other altitudes instead of only at the altitude it was tuned for.
+    static constexpr float lane_pos_var_threshold_base = 5.0f;
+    static constexpr float lane_pos_var_threshold_ref_alt_m = 120.0f;
+    float lane_pos_var_threshold(void) const;
 
     // return true if all configured sources for this lane are ready for use during pre-arm checks
     bool configured_sources_ready(char *failure_msg, uint8_t failure_msg_len) const;

@@ -783,12 +783,25 @@ bool NavEKF3_core::has_acceptable_posxy_variance(void) const
     if (PV_AidingMode == AID_NONE) {
         return true;
     }
-    return get_pos_variance_NE() < lane_pos_var_threshold;
+    return get_pos_variance_NE() < lane_pos_var_threshold();
 }
 
 float NavEKF3_core::get_pos_variance_NE(void) const
 {
     return static_cast<float>(P[7][7]+P[8][8]);
+}
+
+// Scale the eligibility threshold with this lane's own altitude above its EKF
+// origin, matching how a vision-based ext-nav source's position error grows
+// with height (see header for derivation). Uses this core's own position
+// state, not a shared/global altitude, so each lane is judged against its own
+// height estimate. Never goes below the base value, so low-altitude and
+// non-altitude-dependent aiding sources keep the originally calibrated margin.
+float NavEKF3_core::lane_pos_var_threshold(void) const
+{
+    const float alt_m = MAX(-stateStruct.position.z, 0.0f);
+    const float scale = sq(alt_m / lane_pos_var_threshold_ref_alt_m);
+    return MAX(lane_pos_var_threshold_base, lane_pos_var_threshold_base * scale);
 }
 
 bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_msg_len) const
