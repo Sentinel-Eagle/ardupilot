@@ -565,8 +565,7 @@ private:
     void updateLaneSwitchPosDownResetData(uint8_t new_primary, uint8_t old_primary);
     void alignLaneSwitchPositionIfNeeded(uint8_t new_primary, uint8_t old_primary);
 
-    bool primary_core_is_forced(void) const;
-    uint8_t forced_primary_core(void) const;
+    std::optional<uint8_t> forced_primary_core(void) const;
     uint8_t desired_primary_core(void) const;
 
     // position, velocity and yaw source control

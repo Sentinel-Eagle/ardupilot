@@ -98,14 +98,13 @@ static void send_lane_switch_reason(
         reason);
 }
 
-bool NavEKF3::primary_core_is_forced(void) const
+std::optional<uint8_t> NavEKF3::forced_primary_core(void) const
 {
-    return _primary_core.get() >= 0;
-}
-
-uint8_t NavEKF3::forced_primary_core(void) const
-{
-    return uint8_t(_primary_core.get());
+    const int8_t forced_primary = _primary_core.get();
+    if (forced_primary < 0) {
+        return std::nullopt;
+    }
+    return uint8_t(forced_primary);
 }
 
 uint8_t NavEKF3::desired_primary_core(void) const
@@ -114,8 +113,8 @@ uint8_t NavEKF3::desired_primary_core(void) const
         return 0;
     }
 
-    if (primary_core_is_forced()) {
-        const uint8_t forced_primary = forced_primary_core();
+    if (forced_primary_core().has_value()) {
+        const uint8_t forced_primary = forced_primary_core().value();
         if (forced_primary < num_cores && core_is_primary_eligible(core[forced_primary])) {
             return forced_primary;
         }
@@ -1071,7 +1070,7 @@ void NavEKF3::UpdateFilter(void)
     const bool armed  = dal.get_armed();
 
     uint8_t newPrimaryIndex = primary;
-    if (primary_core_is_forced()) {
+    if (forced_primary_core().has_value()) {
         newPrimaryIndex = desired_primary_core();
     } else if ((runCoreSelection && armed) || !armed) {
         newPrimaryIndex = desired_primary_core();
@@ -1090,36 +1089,36 @@ void NavEKF3::UpdateFilter(void)
             newPrimaryIndex,
             core[oldPrimaryIndex],
             core[newPrimaryIndex],
-            primary_core_is_forced() && forced_primary_core() == newPrimaryIndex);
+            forced_primary_core() == newPrimaryIndex);
     }
 
-    if (primary_core_is_forced()) {
+    if (forced_primary_core().has_value()) {
         last_auto_primary_bad_lane.reset();
         last_auto_primary_bad_reason.reset();
 
-        const uint8_t forced_primary = forced_primary_core();
-        if (forced_primary >= num_cores) {
-            if (last_forced_primary_invalid_lane != forced_primary) {
+        const uint8_t forced_primary_index = forced_primary_core().value();
+        if (forced_primary_index >= num_cores) {
+            if (last_forced_primary_invalid_lane != forced_primary_index) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
                     "EKF3 lane req %u invalid",
-                    (unsigned)forced_primary);
-                last_forced_primary_invalid_lane = forced_primary;
+                    (unsigned)forced_primary_index);
+                last_forced_primary_invalid_lane = forced_primary_index;
             }
             last_forced_primary_refused_lane.reset();
             last_forced_primary_refused_reason.reset();
             last_forced_primary_bad_lane.reset();
             last_forced_primary_bad_reason.reset();
-        } else if (forced_primary != primary && !core_is_primary_eligible(core[forced_primary])) {
-            const uint8_t refused_reason = uint8_t(lane_block_reason_id(core[forced_primary]));
-            if (last_forced_primary_refused_lane != forced_primary ||
+        } else if (forced_primary_index != primary && !core_is_primary_eligible(core[forced_primary_index])) {
+            const uint8_t refused_reason = uint8_t(lane_block_reason_id(core[forced_primary_index]));
+            if (last_forced_primary_refused_lane != forced_primary_index ||
                 last_forced_primary_refused_reason != refused_reason) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
                     "EKF3 lane req %u refused: %s",
-                    (unsigned)forced_primary,
-                    lane_block_reason(core[forced_primary]));
-                last_forced_primary_refused_lane = forced_primary;
+                    (unsigned)forced_primary_index,
+                    lane_block_reason(core[forced_primary_index]));
+                last_forced_primary_refused_lane = forced_primary_index;
                 last_forced_primary_refused_reason = refused_reason;
             }
             last_forced_primary_invalid_lane.reset();
@@ -1197,7 +1196,7 @@ void NavEKF3::checkLaneSwitch(void)
 {
     dal.log_event3(AP_DAL::Event::checkLaneSwitch);
 
-    if (primary_core_is_forced()) {
+    if (forced_primary_core().has_value()) {
         return;
     }
 
