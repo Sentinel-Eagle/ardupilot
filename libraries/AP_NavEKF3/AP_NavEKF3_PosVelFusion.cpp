@@ -13,9 +13,6 @@
 // Do not reset vertical velocity using GPS as there is baro alt available to constrain drift
 void NavEKF3_core::ResetVelocity(resetDataSource velResetSource)
 {
-    const AP_NavEKF_Source::SourceXY configured_velxy_source =
-        frontend->sources.getVelXYSource(source_set_index());
-
     // Store the velocity before the reset so that we can record the reset delta
     velResetNE.x = stateStruct.velocity.x;
     velResetNE.y = stateStruct.velocity.y;
@@ -32,13 +29,13 @@ void NavEKF3_core::ResetVelocity(resetDataSource velResetSource)
         const bool reset_from_gps =
             velResetSource == resetDataSource::GPS ||
             (velResetSource == resetDataSource::DEFAULT &&
-             configured_velxy_source == AP_NavEKF_Source::SourceXY::GPS &&
+             velxy_source() == AP_NavEKF_Source::SourceXY::GPS &&
              imuSampleTime_ms - lastTimeGpsReceived_ms < 250);
 
         const bool reset_from_extnav =
             velResetSource == resetDataSource::EXTNAV ||
             (velResetSource == resetDataSource::DEFAULT &&
-             configured_velxy_source == AP_NavEKF_Source::SourceXY::EXTNAV &&
+             velxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV &&
              imuSampleTime_ms - extNavVelMeasTime_ms < 250);
 
         if (reset_from_gps) {
@@ -88,8 +85,6 @@ void NavEKF3_core::ResetVelocity(resetDataSource velResetSource)
 // resets position states to last GPS measurement or to zero if in constant position mode
 void NavEKF3_core::ResetPosition(resetDataSource posResetSource)
 {
-    const AP_NavEKF_Source::SourceXY configured_posxy_source = posxy_source();
-
     // Store the position before the reset so that we can record the reset delta
     posResetNE.x = stateStruct.position.x;
     posResetNE.y = stateStruct.position.y;
@@ -108,19 +103,19 @@ void NavEKF3_core::ResetPosition(resetDataSource posResetSource)
         const bool reset_from_gps =
             posResetSource == resetDataSource::GPS ||
             (posResetSource == resetDataSource::DEFAULT &&
-             configured_posxy_source == AP_NavEKF_Source::SourceXY::GPS &&
+             posxy_source() == AP_NavEKF_Source::SourceXY::GPS &&
              imuSampleTime_ms - lastTimeGpsReceived_ms < 250);
 
         const bool reset_from_rngbcn =
             posResetSource == resetDataSource::RNGBCN ||
             (posResetSource == resetDataSource::DEFAULT &&
-             configured_posxy_source == AP_NavEKF_Source::SourceXY::BEACON &&
+             posxy_source() == AP_NavEKF_Source::SourceXY::BEACON &&
              imuSampleTime_ms - rngBcn.last3DmeasTime_ms < 250);
 
         const bool reset_from_extnav =
             posResetSource == resetDataSource::EXTNAV ||
             (posResetSource == resetDataSource::DEFAULT &&
-             configured_posxy_source == AP_NavEKF_Source::SourceXY::EXTNAV &&
+             posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV &&
              imuSampleTime_ms - extNavDataDelayed.time_ms < 250);
 
         if (reset_from_gps) {
@@ -541,16 +536,15 @@ void NavEKF3_core::SelectVelPosFusion()
     }
 
     // detect position source changes.  Trigger position reset if position source is valid
-    const AP_NavEKF_Source::SourceXY configured_posxy_source = posxy_source();
-    if (configured_posxy_source != posxy_source_last) {
-        posxy_source_reset = (configured_posxy_source != AP_NavEKF_Source::SourceXY::NONE);
-        posxy_source_last = configured_posxy_source;
+    if (posxy_source() != posxy_source_last) {
+        posxy_source_reset = (posxy_source() != AP_NavEKF_Source::SourceXY::NONE);
+        posxy_source_last = posxy_source();
     }
 
 #if EK3_FEATURE_EXTERNAL_NAV
     bool extNavRecoveredAfterLoss = false;
     const bool extNavPosFresh = extNavPosRecent();
-    if (configured_posxy_source == AP_NavEKF_Source::SourceXY::EXTNAV) {
+    if (posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV) {
         if (!extNavPosFresh) {
             if (extNavPosAvailableLast) {
                 extNavPosResetOnRecoveryPending = true;
@@ -571,7 +565,7 @@ void NavEKF3_core::SelectVelPosFusion()
     fuseVelData = false;
 
     // Determine if we need to fuse position and velocity data on this time step
-    if (gpsDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (configured_posxy_source == AP_NavEKF_Source::SourceXY::GPS)) {
+    if (gpsDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (posxy_source() == AP_NavEKF_Source::SourceXY::GPS)) {
 
         // Don't fuse velocity data if GPS doesn't support it
         fuseVelData = uses_velxy_source(AP_NavEKF_Source::SourceXY::GPS);
@@ -591,7 +585,7 @@ void NavEKF3_core::SelectVelPosFusion()
         velPosObs[3] = posxy.x;
         velPosObs[4] = posxy.y;
 #if EK3_FEATURE_EXTERNAL_NAV
-    } else if (extNavDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (configured_posxy_source == AP_NavEKF_Source::SourceXY::EXTNAV)) {
+    } else if (extNavDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV)) {
         // use external nav system for horizontal position
         extNavUsedForPos = true;
         fusePosData = true;
@@ -620,7 +614,7 @@ void NavEKF3_core::SelectVelPosFusion()
     selectHeightForFusion();
 
     // if we are using GPS, check for a change in receiver and reset position and height
-    if (gpsDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (configured_posxy_source == AP_NavEKF_Source::SourceXY::GPS) && (gpsDataDelayed.sensor_idx != last_gps_idx || posxy_source_reset)) {
+    if (gpsDataToFuse && (PV_AidingMode == AID_ABSOLUTE) && (posxy_source() == AP_NavEKF_Source::SourceXY::GPS) && (gpsDataDelayed.sensor_idx != last_gps_idx || posxy_source_reset)) {
         // mark a source reset as consumed
         posxy_source_reset = false;
 
@@ -642,7 +636,7 @@ void NavEKF3_core::SelectVelPosFusion()
     // check for external nav position reset
     if (extNavDataToFuse &&
         (PV_AidingMode == AID_ABSOLUTE) &&
-        (configured_posxy_source == AP_NavEKF_Source::SourceXY::EXTNAV) &&
+        (posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV) &&
         (extNavDataDelayed.posReset || posxy_source_reset || extNavRecoveredAfterLoss)) {
         // mark a source reset as consumed
         posxy_source_reset = false;
@@ -701,10 +695,6 @@ void NavEKF3_core::SelectVelPosFusion()
 // fuse selected position, velocity and height measurements
 void NavEKF3_core::FuseVelPosNED()
 {
-    const AP_NavEKF_Source::SourceXY configured_posxy_source = posxy_source();
-    const AP_NavEKF_Source::SourceXY configured_velxy_source =
-        frontend->sources.getVelXYSource(source_set_index());
-
     // health is set bad until test passed
     bool velCheckPassed = false; // boolean true if velocity measurements have passed innovation consistency checks
     bool posCheckPassed = false; // boolean true if position measurements have passed innovation consistency check
@@ -867,7 +857,7 @@ void NavEKF3_core::FuseVelPosNED()
                     // the veto: innovations fail whenever a reset is needed, whether
                     // or not GPS is at fault.
                     bool holdoffGpsReset = false;
-                    if (configured_posxy_source == AP_NavEKF_Source::SourceXY::GPS &&
+                    if (posxy_source() == AP_NavEKF_Source::SourceXY::GPS &&
                         !(gpsGoodToAlign && gpsSpdAccPass)) {
                         if (posResetVetoStart_ms == 0 ||
                             imuSampleTime_ms - posResetVetoLast_ms > 1000) {
@@ -881,7 +871,7 @@ void NavEKF3_core::FuseVelPosNED()
 #if EK3_FEATURE_EXTERNAL_NAV
                     // For EXTNAV position lanes, dead reckon through data outages and only
                     // perform a one-shot position reset when EXTNAV comes back after a loss.
-                    if ((configured_posxy_source == AP_NavEKF_Source::SourceXY::EXTNAV) && !extNavPosRecent()) {
+                    if ((posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV) && !extNavPosRecent()) {
                         fusePosData = false;
                     } else
 #endif // EK3_FEATURE_EXTERNAL_NAV
@@ -916,7 +906,7 @@ void NavEKF3_core::FuseVelPosNED()
                         velTestRatio = 0.0f;
                     }
 
-                    if (configured_posxy_source == AP_NavEKF_Source::SourceXY::EXTNAV) {
+                    if (posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV) {
                         const char *reason = posTimeout ? "position timeout" : "position drift large";
                         if (!extNavRepositionMessageSentThisCycle) {
                             GCS_SEND_TEXT(
@@ -1061,9 +1051,9 @@ void NavEKF3_core::FuseVelPosNED()
         }
 
         const bool scale_horizontal_obs_by_gps =
-            configured_posxy_source == AP_NavEKF_Source::SourceXY::GPS;
+            posxy_source() == AP_NavEKF_Source::SourceXY::GPS;
         const bool scale_velocity_obs_by_gps =
-            configured_velxy_source == AP_NavEKF_Source::SourceXY::GPS;
+            velxy_source() == AP_NavEKF_Source::SourceXY::GPS;
 
         // fuse measurements sequentially
         for (obsIndex=0; obsIndex<=5; obsIndex++) {

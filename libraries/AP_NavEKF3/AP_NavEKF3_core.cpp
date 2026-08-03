@@ -67,6 +67,11 @@ AP_NavEKF_Source::SourceXY NavEKF3_core::posxy_source(void) const
     return frontend->sources.getPosXYSource(source_set_index());
 }
 
+AP_NavEKF_Source::SourceXY NavEKF3_core::velxy_source(void) const
+{
+    return frontend->sources.getVelXYSource(source_set_index());
+}
+
 AP_NavEKF_Source::SourceZ NavEKF3_core::posz_source(void) const
 {
     return frontend->sources.getPosZSource(source_set_index());

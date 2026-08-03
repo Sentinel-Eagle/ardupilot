@@ -1667,6 +1667,7 @@ private:
     bool uses_gps_yaw_source(void) const;
     bool uses_any_gps_source(void) const;
     AP_NavEKF_Source::SourceXY posxy_source(void) const;
+    AP_NavEKF_Source::SourceXY velxy_source(void) const;
     AP_NavEKF_Source::SourceZ posz_source(void) const;
     AP_NavEKF_Source::SourceYaw yaw_source(void) const;
 

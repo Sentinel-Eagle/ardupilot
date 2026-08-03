@@ -56,10 +56,9 @@ bool NavEKF3_core::pre_arm_check(bool requires_position, char *failure_msg, uint
 {
     if (requires_position) {
         // additional checks when position is required, used by pre-arm checks
-        const AP_NavEKF_Source::SourceXY configured_posxy_source = posxy_source();
         if (onGround &&
             PV_AidingMode == AID_ABSOLUTE &&
-            posxy_source_has_absolute_measurement(configured_posxy_source) &&
+            posxy_source_has_absolute_measurement(posxy_source()) &&
             !has_acceptable_posxy_variance()) {
             const float hpos_innovation = sqrtf(sq(innovVelPos[3])+sq(innovVelPos[4]));
             dal.snprintf(failure_msg, failure_msg_len,

@@ -788,7 +788,7 @@ bool NavEKF3_core::has_acceptable_posxy_variance(void) const
 
 float NavEKF3_core::get_pos_variance_NE(void) const
 {
-    return static_cast<float>(P[7][7]+P[8][8]);
+    return P[7][7] + P[8][8];
 }
 
 // Scale the eligibility threshold with this lane's own altitude above its EKF
