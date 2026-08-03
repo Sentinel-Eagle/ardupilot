@@ -7,6 +7,10 @@
 #include "AP_DAL/AP_DAL.h"
 
 static const int32_t GPS_POSXY_AIDING_MAX_AGE_MS = 400;
+// Maximum measurement ages accepted while checking configured sources before arming.
+static constexpr uint32_t GPS_PREARM_MAX_AGE_MS = 500;
+static constexpr uint32_t EXTNAV_VEL_PREARM_MAX_AGE_MS = 250;
+static constexpr uint32_t BARO_PREARM_MAX_AGE_MS = 500;
 
 static bool lane_source_is_recent(
     uint32_t current_time_ms,
@@ -663,7 +667,11 @@ bool NavEKF3_core::has_required_posxy_aiding(void) const
     case AP_NavEKF_Source::SourceXY::EXTNAV:
         return extNavPosRecent();
     case AP_NavEKF_Source::SourceXY::OPTFLOW:
+#if EK3_FEATURE_OPTFLOW_FUSION
         return readyToUseOptFlow();
+#else
+        return false;
+#endif
     case AP_NavEKF_Source::SourceXY::NONE:
     case AP_NavEKF_Source::SourceXY::WHEEL_ENCODER:
         return true;
@@ -811,7 +819,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         return false;
     };
     const auto __gps_recent_for_prearm = [&]() -> bool {
-        return lane_source_is_recent(imuSampleTime_ms, lastTimeGpsReceived_ms, 500);
+        return lane_source_is_recent(imuSampleTime_ms, lastTimeGpsReceived_ms, GPS_PREARM_MAX_AGE_MS);
     };
     const auto __extnav_recent_for_prearm = [&]() -> bool {
         return extNavPosRecent();
@@ -826,6 +834,13 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
     };
     const auto __extnav_posxy_ready_for_prearm = [&]() -> bool {
         return tiltAlignComplete && __extnav_recent_for_prearm();
+    };
+    const auto __extnav_vel_ready_for_prearm = [&]() -> bool {
+#if EK3_FEATURE_EXTERNAL_NAV
+        return (imuSampleTime_ms - extNavVelMeasTime_ms) < EXTNAV_VEL_PREARM_MAX_AGE_MS && useExtNavVel;
+#else
+        return false;
+#endif
     };
     const auto __fail_gps_source = [&](const char *field_name, const bool require_yaw, const bool require_vz) -> bool {
         const bool bias_ok = delAngBiasLearned || assume_zero_sideslip();
@@ -895,12 +910,16 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         }
         break;
     case AP_NavEKF_Source::SourceXY::OPTFLOW:
+#if EK3_FEATURE_OPTFLOW_FUSION
         if (!readyToUseOptFlow()) {
             return __fail("VELXY");
         }
+#else
+        return __fail("VELXY");
+#endif
         break;
     case AP_NavEKF_Source::SourceXY::EXTNAV:
-        if (!(((imuSampleTime_ms - extNavVelMeasTime_ms) < 250 && useExtNavVel) || readyToUseBodyOdm())) {
+        if (!(__extnav_vel_ready_for_prearm() || readyToUseBodyOdm())) {
             return __fail("VELXY");
         }
         break;
@@ -917,7 +936,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
     switch (posz_source()) {
     case AP_NavEKF_Source::SourceZ::BARO:
         if (!(dal.baro().healthy(selected_baro) &&
-              (imuSampleTime_ms - lastBaroReceived_ms < 500))) {
+              (imuSampleTime_ms - lastBaroReceived_ms < BARO_PREARM_MAX_AGE_MS))) {
             return __fail("POSZ");
         }
         break;
@@ -934,10 +953,14 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         }
         break;
     case AP_NavEKF_Source::SourceZ::BEACON:
+#if EK3_FEATURE_BEACON_FUSION
         if (!(tiltAlignComplete && yawAlignComplete && delAngBiasLearned &&
               rngBcn.alignmentCompleted && rngBcn.dataToFuse)) {
             return __fail("POSZ");
         }
+#else
+        return __fail("POSZ");
+#endif
         break;
     case AP_NavEKF_Source::SourceZ::EXTNAV:
         if (!(tiltAlignComplete && extNavPosRecent())) {
@@ -957,7 +980,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         }
         break;
     case AP_NavEKF_Source::SourceZ::EXTNAV:
-        if (!(((imuSampleTime_ms - extNavVelMeasTime_ms) < 250 && useExtNavVel) || readyToUseBodyOdm())) {
+        if (!(__extnav_vel_ready_for_prearm() || readyToUseBodyOdm())) {
             return __fail("VELZ");
         }
         break;

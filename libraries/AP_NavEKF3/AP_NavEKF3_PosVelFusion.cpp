@@ -5,6 +5,11 @@
 #include <GCS_MAVLink/GCS.h>
 #include <AP_DAL/AP_DAL.h>
 
+// Maximum measurement age accepted when selecting data for a velocity reset.
+static constexpr uint32_t VELOCITY_RESET_MAX_AGE_MS = 250;
+// Maximum measurement age accepted when selecting data for a position reset.
+static constexpr uint32_t POSITION_RESET_MAX_AGE_MS = 250;
+
 /********************************************************
 *                   RESET FUNCTIONS                     *
 ********************************************************/
@@ -30,13 +35,15 @@ void NavEKF3_core::ResetVelocity(resetDataSource velResetSource)
             velResetSource == resetDataSource::GPS ||
             (velResetSource == resetDataSource::DEFAULT &&
              velxy_source() == AP_NavEKF_Source::SourceXY::GPS &&
-             imuSampleTime_ms - lastTimeGpsReceived_ms < 250);
+             imuSampleTime_ms - lastTimeGpsReceived_ms < VELOCITY_RESET_MAX_AGE_MS);
 
+#if EK3_FEATURE_EXTERNAL_NAV
         const bool reset_from_extnav =
             velResetSource == resetDataSource::EXTNAV ||
             (velResetSource == resetDataSource::DEFAULT &&
              velxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV &&
-             imuSampleTime_ms - extNavVelMeasTime_ms < 250);
+             imuSampleTime_ms - extNavVelMeasTime_ms < VELOCITY_RESET_MAX_AGE_MS);
+#endif
 
         if (reset_from_gps) {
             // reset horizontal velocity states to the configured GPS velocity
@@ -104,19 +111,23 @@ void NavEKF3_core::ResetPosition(resetDataSource posResetSource)
             posResetSource == resetDataSource::GPS ||
             (posResetSource == resetDataSource::DEFAULT &&
              posxy_source() == AP_NavEKF_Source::SourceXY::GPS &&
-             imuSampleTime_ms - lastTimeGpsReceived_ms < 250);
+             imuSampleTime_ms - lastTimeGpsReceived_ms < POSITION_RESET_MAX_AGE_MS);
 
+#if EK3_FEATURE_BEACON_FUSION
         const bool reset_from_rngbcn =
             posResetSource == resetDataSource::RNGBCN ||
             (posResetSource == resetDataSource::DEFAULT &&
              posxy_source() == AP_NavEKF_Source::SourceXY::BEACON &&
-             imuSampleTime_ms - rngBcn.last3DmeasTime_ms < 250);
+             imuSampleTime_ms - rngBcn.last3DmeasTime_ms < POSITION_RESET_MAX_AGE_MS);
+#endif
 
+#if EK3_FEATURE_EXTERNAL_NAV
         const bool reset_from_extnav =
             posResetSource == resetDataSource::EXTNAV ||
             (posResetSource == resetDataSource::DEFAULT &&
              posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV &&
-             imuSampleTime_ms - extNavDataDelayed.time_ms < 250);
+             imuSampleTime_ms - extNavDataDelayed.time_ms < POSITION_RESET_MAX_AGE_MS);
+#endif
 
         if (reset_from_gps) {
             // reset position states to the configured GPS position
@@ -490,7 +501,9 @@ void NavEKF3_core::CalculateVelInnovationsAndVariances(const Vector3F &velocity,
 // select fusion of velocity, position and height measurements
 void NavEKF3_core::SelectVelPosFusion()
 {
+#if EK3_FEATURE_EXTERNAL_NAV
     extNavRepositionMessageSentThisCycle = false;
+#endif
 
     // Check if the magnetometer has been fused on that time step and the filter is running at faster than 200 Hz
     // If so, don't fuse measurements on this time step to reduce frame over-runs
@@ -906,6 +919,7 @@ void NavEKF3_core::FuseVelPosNED()
                         velTestRatio = 0.0f;
                     }
 
+#if EK3_FEATURE_EXTERNAL_NAV
                     if (posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV) {
                         const char *reason = posTimeout ? "position timeout" : "position drift large";
                         if (!extNavRepositionMessageSentThisCycle) {
@@ -917,6 +931,7 @@ void NavEKF3_core::FuseVelPosNED()
                             extNavRepositionMessageSentThisCycle = true;
                         }
                     }
+#endif
                     }
                 }
             } else {

@@ -13,6 +13,9 @@
 #include <algorithm>
 #include <new>
 
+// A lane must continuously pass its variance gates for at least this many milliseconds before automatic selection.
+static constexpr uint32_t PRIMARY_LANE_VARIANCE_STABILITY_TIME_MS = 5000;
+
 enum class LaneBlockReason : uint8_t {
     RECOVERED = 0,
     UNHEALTHY = 1,
@@ -126,9 +129,9 @@ uint8_t NavEKF3::desired_primary_core(void) const
         const std::optional<uint32_t> &yaw_stable_since_ms = coreYawVarAcceptSince_ms[core_index];
         const std::optional<uint32_t> &pos_stable_since_ms = corePosVarAcceptSince_ms[core_index];
         const bool has_stable_yaw_variance =
-            yaw_stable_since_ms.has_value() && now_ms - *yaw_stable_since_ms >= 5000;
+            yaw_stable_since_ms.has_value() && now_ms - *yaw_stable_since_ms >= PRIMARY_LANE_VARIANCE_STABILITY_TIME_MS;
         const bool has_stable_posxy_variance =
-            pos_stable_since_ms.has_value() && now_ms - *pos_stable_since_ms >= 5000;
+            pos_stable_since_ms.has_value() && now_ms - *pos_stable_since_ms >= PRIMARY_LANE_VARIANCE_STABILITY_TIME_MS;
         // Source sets are preference ordered, so the lowest eligible lane always
         // wins. A lane other than the current primary must also hold acceptable
         // variances for the full stability window before it can be selected,
