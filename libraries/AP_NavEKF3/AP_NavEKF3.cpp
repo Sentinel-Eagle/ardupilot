@@ -25,13 +25,7 @@ enum class LaneBlockReason : uint8_t {
 
 static bool core_is_primary_eligible(const NavEKF3_core &candidate)
 {
-    return candidate.healthy() &&
-           candidate.have_aligned_tilt() &&
-           candidate.have_aligned_yaw() &&
-           candidate.has_required_yaw_aiding() &&
-           candidate.has_acceptable_yaw_variance() &&
-           candidate.has_required_posxy_aiding() &&
-           candidate.has_acceptable_posxy_variance();
+    return lane_block_reason_id(candidate) == LaneBlockReason::RECOVERED;
 }
 
 static LaneBlockReason lane_block_reason_id(const NavEKF3_core &candidate)
