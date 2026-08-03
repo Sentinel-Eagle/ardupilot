@@ -703,7 +703,8 @@ bool AP_Arming::gps_checks(bool report)
             return false;
         }
 
-        // check AHRS and GPS are within 10m of each other when GPS is the active horizontal position source
+        // check AHRS and GPS are within 10m of each other
+        // when GPS is the active horizontal position source.
         // Note: configured_to_use_gps_for_posxy() resolves through the PRIMARY lane's
         // source set, so with lane separation this check is skipped entirely whenever
         // the ext-nav lane is primary at arm time - a bad ext-nav position is then
