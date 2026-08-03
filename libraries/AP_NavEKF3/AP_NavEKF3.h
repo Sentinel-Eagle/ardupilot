@@ -19,6 +19,8 @@
  */
 #pragma once
 
+#include <optional>
+
 #include <AP_Common/Location.h>
 #include <AP_Math/AP_Math.h>
 #include <AP_Param/AP_Param.h>
@@ -376,13 +378,13 @@ private:
     uint8_t num_cores; // number of allocated cores
     uint8_t primary;   // current primary core
     NavEKF3_core *core = nullptr;
-    uint8_t last_forced_primary_invalid_lane = UINT8_MAX;
-    uint8_t last_forced_primary_refused_lane = UINT8_MAX;
-    uint8_t last_forced_primary_refused_reason = UINT8_MAX;
-    uint8_t last_forced_primary_bad_lane = UINT8_MAX;
-    uint8_t last_forced_primary_bad_reason = UINT8_MAX;
-    uint8_t last_auto_primary_bad_lane = UINT8_MAX;
-    uint8_t last_auto_primary_bad_reason = UINT8_MAX;
+    std::optional<uint8_t> last_forced_primary_invalid_lane;
+    std::optional<uint8_t> last_forced_primary_refused_lane;
+    std::optional<uint8_t> last_forced_primary_refused_reason;
+    std::optional<uint8_t> last_forced_primary_bad_lane;
+    std::optional<uint8_t> last_forced_primary_bad_reason;
+    std::optional<uint8_t> last_auto_primary_bad_lane;
+    std::optional<uint8_t> last_auto_primary_bad_reason;
 
     uint32_t _frameTimeUsec;        // time per IMU frame
     uint8_t  _framesPerPrediction;  // expected number of IMU frames per prediction
@@ -544,8 +546,8 @@ private:
     bool runCoreSelection;                          // true when the primary core has stabilised and the core selection logic can be started
     bool coreSetupRequired[MAX_EKF_CORES];          // true when this core index needs to be setup
     uint8_t coreImuIndex[MAX_EKF_CORES];            // IMU index used by this core
-    uint32_t coreYawVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the yaw variance gate
-    uint32_t corePosVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the pos variance gate
+    std::optional<uint32_t> coreYawVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the yaw variance gate
+    std::optional<uint32_t> corePosVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the pos variance gate
     
     // update the yaw reset data to capture changes due to a lane switch
     // new_primary - index of the ekf instance that we are about to switch to as the primary

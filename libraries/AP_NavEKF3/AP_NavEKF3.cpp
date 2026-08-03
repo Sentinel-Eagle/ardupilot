@@ -10,6 +10,7 @@
 
 #include "AP_DAL/AP_DAL.h"
 
+#include <algorithm>
 #include <new>
 
 enum class LaneBlockReason : uint8_t {
@@ -22,6 +23,8 @@ enum class LaneBlockReason : uint8_t {
     LOST_POS_AIDING = 6,
     POS_VARIANCE_HIGH = 7,
 };
+
+static LaneBlockReason lane_block_reason_id(const NavEKF3_core &candidate);
 
 static bool core_is_primary_eligible(const NavEKF3_core &candidate)
 {
@@ -121,12 +124,12 @@ uint8_t NavEKF3::desired_primary_core(void) const
 
     const uint32_t now_ms = AP::dal().millis();
     for (uint8_t core_index = 0; core_index < num_cores; core_index++) {
-        const uint32_t yaw_stable_since_ms = coreYawVarAcceptSince_ms[core_index];
-        const uint32_t pos_stable_since_ms = corePosVarAcceptSince_ms[core_index];
+        const std::optional<uint32_t> &yaw_stable_since_ms = coreYawVarAcceptSince_ms[core_index];
+        const std::optional<uint32_t> &pos_stable_since_ms = corePosVarAcceptSince_ms[core_index];
         const bool has_stable_yaw_variance =
-            yaw_stable_since_ms != 0 && now_ms - yaw_stable_since_ms >= 5000;
+            yaw_stable_since_ms.has_value() && now_ms - *yaw_stable_since_ms >= 5000;
         const bool has_stable_posxy_variance =
-            pos_stable_since_ms != 0 && now_ms - pos_stable_since_ms >= 5000;
+            pos_stable_since_ms.has_value() && now_ms - *pos_stable_since_ms >= 5000;
         // Source sets are preference ordered, so the lowest eligible lane always
         // wins. A lane other than the current primary must also hold acceptable
         // variances for the full stability window before it can be selected,
@@ -925,8 +928,8 @@ bool NavEKF3::InitialiseFilter(void)
         for (uint8_t i=0; i<MAX_EKF_CORES; i++) {
             coreSetupRequired[i] = false;
             coreImuIndex[i] = 0;
-            coreYawVarAcceptSince_ms[i] = 0;
-            corePosVarAcceptSince_ms[i] = 0;
+            coreYawVarAcceptSince_ms[i].reset();
+            corePosVarAcceptSince_ms[i].reset();
         }
         num_cores = 0;
 
@@ -1025,19 +1028,19 @@ void NavEKF3::UpdateFilter(void)
     const uint32_t now_ms = AP::dal().millis();
     for (uint8_t i = 0; i < num_cores; i++) {
         if (core[i].has_acceptable_yaw_variance()) {
-            if (coreYawVarAcceptSince_ms[i] == 0) {
+            if (!coreYawVarAcceptSince_ms[i].has_value()) {
                 coreYawVarAcceptSince_ms[i] = now_ms;
             }
         } else {
-            coreYawVarAcceptSince_ms[i] = 0;
+            coreYawVarAcceptSince_ms[i].reset();
         }
 
         if (core[i].has_acceptable_posxy_variance()) {
-            if (corePosVarAcceptSince_ms[i] == 0) {
+            if (!corePosVarAcceptSince_ms[i].has_value()) {
                 corePosVarAcceptSince_ms[i] = now_ms;
             }
         } else {
-            corePosVarAcceptSince_ms[i] = 0;
+            corePosVarAcceptSince_ms[i].reset();
         }
 
         // A position reset re-seeds the position covariance, so a small P right
@@ -1048,9 +1051,9 @@ void NavEKF3::UpdateFilter(void)
         Vector2f posResetDelta;
         const uint32_t lastPosResetTime_ms = core[i].getLastPosNorthEastReset(posResetDelta);
         if (lastPosResetTime_ms != 0 &&
-            corePosVarAcceptSince_ms[i] != 0 &&
-            lastPosResetTime_ms >= corePosVarAcceptSince_ms[i]) {
-            corePosVarAcceptSince_ms[i] = 0;
+            corePosVarAcceptSince_ms[i].has_value() &&
+            lastPosResetTime_ms >= *corePosVarAcceptSince_ms[i]) {
+            corePosVarAcceptSince_ms[i].reset();
         }
     }
 
@@ -1091,8 +1094,8 @@ void NavEKF3::UpdateFilter(void)
     }
 
     if (primary_core_is_forced()) {
-        last_auto_primary_bad_lane = UINT8_MAX;
-        last_auto_primary_bad_reason = UINT8_MAX;
+        last_auto_primary_bad_lane.reset();
+        last_auto_primary_bad_reason.reset();
 
         const uint8_t forced_primary = forced_primary_core();
         if (forced_primary >= num_cores) {
@@ -1103,10 +1106,10 @@ void NavEKF3::UpdateFilter(void)
                     (unsigned)forced_primary);
                 last_forced_primary_invalid_lane = forced_primary;
             }
-            last_forced_primary_refused_lane = UINT8_MAX;
-            last_forced_primary_refused_reason = UINT8_MAX;
-            last_forced_primary_bad_lane = UINT8_MAX;
-            last_forced_primary_bad_reason = UINT8_MAX;
+            last_forced_primary_refused_lane.reset();
+            last_forced_primary_refused_reason.reset();
+            last_forced_primary_bad_lane.reset();
+            last_forced_primary_bad_reason.reset();
         } else if (forced_primary != primary && !core_is_primary_eligible(core[forced_primary])) {
             const uint8_t refused_reason = uint8_t(lane_block_reason_id(core[forced_primary]));
             if (last_forced_primary_refused_lane != forced_primary ||
@@ -1119,9 +1122,9 @@ void NavEKF3::UpdateFilter(void)
                 last_forced_primary_refused_lane = forced_primary;
                 last_forced_primary_refused_reason = refused_reason;
             }
-            last_forced_primary_invalid_lane = UINT8_MAX;
-            last_forced_primary_bad_lane = UINT8_MAX;
-            last_forced_primary_bad_reason = UINT8_MAX;
+            last_forced_primary_invalid_lane.reset();
+            last_forced_primary_bad_lane.reset();
+            last_forced_primary_bad_reason.reset();
         } else if (!core_is_primary_eligible(core[primary])) {
             const uint8_t bad_reason = uint8_t(lane_block_reason_id(core[primary]));
             if (last_forced_primary_bad_lane != primary ||
@@ -1134,26 +1137,26 @@ void NavEKF3::UpdateFilter(void)
                 last_forced_primary_bad_lane = primary;
                 last_forced_primary_bad_reason = bad_reason;
             }
-            last_forced_primary_invalid_lane = UINT8_MAX;
-            last_forced_primary_refused_lane = UINT8_MAX;
-            last_forced_primary_refused_reason = UINT8_MAX;
+            last_forced_primary_invalid_lane.reset();
+            last_forced_primary_refused_lane.reset();
+            last_forced_primary_refused_reason.reset();
         } else {
-            last_forced_primary_invalid_lane = UINT8_MAX;
-            if (last_forced_primary_bad_lane != UINT8_MAX) {
+            last_forced_primary_invalid_lane.reset();
+            if (last_forced_primary_bad_lane.has_value()) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_INFO,
                     "EKF3 lane %u forced recovered",
                     (unsigned)primary);
-                last_forced_primary_bad_lane = UINT8_MAX;
-                last_forced_primary_bad_reason = UINT8_MAX;
+                last_forced_primary_bad_lane.reset();
+                last_forced_primary_bad_reason.reset();
             }
         }
     } else {
-        last_forced_primary_invalid_lane = UINT8_MAX;
-        last_forced_primary_refused_lane = UINT8_MAX;
-        last_forced_primary_refused_reason = UINT8_MAX;
-        last_forced_primary_bad_lane = UINT8_MAX;
-        last_forced_primary_bad_reason = UINT8_MAX;
+        last_forced_primary_invalid_lane.reset();
+        last_forced_primary_refused_lane.reset();
+        last_forced_primary_refused_reason.reset();
+        last_forced_primary_bad_lane.reset();
+        last_forced_primary_bad_reason.reset();
 
         const bool any_lane_eligible = std::any_of(core, core + num_cores, core_is_primary_eligible);
 
@@ -1170,12 +1173,12 @@ void NavEKF3::UpdateFilter(void)
                 last_auto_primary_bad_lane = bad_lane;
                 last_auto_primary_bad_reason = bad_reason;
             }
-        } else if (last_auto_primary_bad_lane != UINT8_MAX) {
+        } else if (last_auto_primary_bad_lane.has_value()) {
             GCS_SEND_TEXT(
                 MAV_SEVERITY_INFO,
                 "EKF3 lanes recovered");
-            last_auto_primary_bad_lane = UINT8_MAX;
-            last_auto_primary_bad_reason = UINT8_MAX;
+            last_auto_primary_bad_lane.reset();
+            last_auto_primary_bad_reason.reset();
         }
     }
 
