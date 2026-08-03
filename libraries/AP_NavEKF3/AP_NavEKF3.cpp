@@ -1155,13 +1155,7 @@ void NavEKF3::UpdateFilter(void)
         last_forced_primary_bad_lane = UINT8_MAX;
         last_forced_primary_bad_reason = UINT8_MAX;
 
-        bool any_lane_eligible = false;
-        for (uint8_t i = 0; i < num_cores; i++) {
-            if (core_is_primary_eligible(core[i])) {
-                any_lane_eligible = true;
-                break;
-            }
-        }
+        const bool any_lane_eligible = std::any_of(core, core + num_cores, core_is_primary_eligible);
 
         if (!any_lane_eligible) {
             const uint8_t bad_lane = primary < num_cores ? primary : 0;
