@@ -1073,9 +1073,7 @@ void NavEKF3::UpdateFilter(void)
     const bool armed  = dal.get_armed();
 
     uint8_t newPrimaryIndex = primary;
-    if (forced_primary_core().has_value()) {
-        newPrimaryIndex = desired_primary_core();
-    } else if ((runCoreSelection && armed) || !armed) {
+    if (forced_primary_core().has_value() || (runCoreSelection && armed) || !armed) {
         newPrimaryIndex = desired_primary_core();
     }
 
