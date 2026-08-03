@@ -806,28 +806,28 @@ float NavEKF3_core::lane_pos_var_threshold(void) const
 
 bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_msg_len) const
 {
-    const auto fail = [&](const char *field_name) -> bool {
+    const auto __fail = [&](const char *field_name) -> bool {
         dal.snprintf(failure_msg, failure_msg_len, "EKF3 core %d %s not ready", (int)core_index, field_name);
         return false;
     };
-    const auto gps_recent_for_prearm = [&]() -> bool {
+    const auto __gps_recent_for_prearm = [&]() -> bool {
         return lane_source_is_recent(imuSampleTime_ms, lastTimeGpsReceived_ms, 500);
     };
-    const auto extnav_recent_for_prearm = [&]() -> bool {
+    const auto __extnav_recent_for_prearm = [&]() -> bool {
         return extNavPosRecent();
     };
-    const auto gps_posxy_ready_for_prearm = [&]() -> bool {
+    const auto __gps_posxy_ready_for_prearm = [&]() -> bool {
         return validOrigin &&
                tiltAlignComplete &&
                yawAlignComplete &&
                (delAngBiasLearned || assume_zero_sideslip()) &&
                gpsGoodToAlign &&
-               gps_recent_for_prearm();
+               __gps_recent_for_prearm();
     };
-    const auto extnav_posxy_ready_for_prearm = [&]() -> bool {
-        return tiltAlignComplete && extnav_recent_for_prearm();
+    const auto __extnav_posxy_ready_for_prearm = [&]() -> bool {
+        return tiltAlignComplete && __extnav_recent_for_prearm();
     };
-    const auto fail_gps_source = [&](const char *field_name, const bool require_yaw, const bool require_vz) -> bool {
+    const auto __fail_gps_source = [&](const char *field_name, const bool require_yaw, const bool require_vz) -> bool {
         const bool bias_ok = delAngBiasLearned || assume_zero_sideslip();
         const char *reason = "gps unavailable";
         if (!validOrigin) {
@@ -840,7 +840,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
             reason = "gps bias learning";
         } else if (!gpsGoodToAlign) {
             reason = "gps quality low";
-        } else if (!gps_recent_for_prearm()) {
+        } else if (!__gps_recent_for_prearm()) {
             reason = "gps stale";
         } else if (require_vz && !gpsDataNew.have_vz) {
             reason = "gps vertical velocity unavailable";
@@ -854,7 +854,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
             reason);
         return false;
     };
-    const auto fail_posxy_extnav = [&]() -> bool {
+    const auto __fail_posxy_extnav = [&]() -> bool {
         dal.snprintf(
             failure_msg,
             failure_msg_len,
@@ -866,18 +866,18 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
 
     switch (posxy_source()) {
     case AP_NavEKF_Source::SourceXY::GPS:
-        if (!gps_posxy_ready_for_prearm()) {
-            return fail_gps_source("POSXY", true, false);
+        if (!__gps_posxy_ready_for_prearm()) {
+            return __fail_gps_source("POSXY", true, false);
         }
         break;
     case AP_NavEKF_Source::SourceXY::BEACON:
         if (!readyToUseRangeBeacon()) {
-            return fail("POSXY");
+            return __fail("POSXY");
         }
         break;
     case AP_NavEKF_Source::SourceXY::EXTNAV:
-        if (!extnav_posxy_ready_for_prearm()) {
-            return fail_posxy_extnav();
+        if (!__extnav_posxy_ready_for_prearm()) {
+            return __fail_posxy_extnav();
         }
         break;
     case AP_NavEKF_Source::SourceXY::NONE:
@@ -890,23 +890,23 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
     case AP_NavEKF_Source::SourceXY::GPS:
         if (!(validOrigin && tiltAlignComplete && yawAlignComplete &&
               (delAngBiasLearned || assume_zero_sideslip()) &&
-              gpsGoodToAlign && gps_recent_for_prearm())) {
-            return fail_gps_source("VELXY", true, false);
+              gpsGoodToAlign && __gps_recent_for_prearm())) {
+            return __fail_gps_source("VELXY", true, false);
         }
         break;
     case AP_NavEKF_Source::SourceXY::OPTFLOW:
         if (!readyToUseOptFlow()) {
-            return fail("VELXY");
+            return __fail("VELXY");
         }
         break;
     case AP_NavEKF_Source::SourceXY::EXTNAV:
         if (!(((imuSampleTime_ms - extNavVelMeasTime_ms) < 250 && useExtNavVel) || readyToUseBodyOdm())) {
-            return fail("VELXY");
+            return __fail("VELXY");
         }
         break;
     case AP_NavEKF_Source::SourceXY::WHEEL_ENCODER:
         if (!readyToUseBodyOdm()) {
-            return fail("VELXY");
+            return __fail("VELXY");
         }
         break;
     case AP_NavEKF_Source::SourceXY::NONE:
@@ -918,30 +918,30 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
     case AP_NavEKF_Source::SourceZ::BARO:
         if (!(dal.baro().healthy(selected_baro) &&
               (imuSampleTime_ms - lastBaroReceived_ms < 500))) {
-            return fail("POSZ");
+            return __fail("POSZ");
         }
         break;
     case AP_NavEKF_Source::SourceZ::RANGEFINDER:
         if (!rangeDataToFuse) {
-            return fail("POSZ");
+            return __fail("POSZ");
         }
         break;
     case AP_NavEKF_Source::SourceZ::GPS:
         if (!(validOrigin && tiltAlignComplete && yawAlignComplete &&
               (delAngBiasLearned || assume_zero_sideslip()) &&
-              gpsGoodToAlign && gps_recent_for_prearm())) {
-            return fail_gps_source("POSZ", true, false);
+              gpsGoodToAlign && __gps_recent_for_prearm())) {
+            return __fail_gps_source("POSZ", true, false);
         }
         break;
     case AP_NavEKF_Source::SourceZ::BEACON:
         if (!(tiltAlignComplete && yawAlignComplete && delAngBiasLearned &&
               rngBcn.alignmentCompleted && rngBcn.dataToFuse)) {
-            return fail("POSZ");
+            return __fail("POSZ");
         }
         break;
     case AP_NavEKF_Source::SourceZ::EXTNAV:
         if (!(tiltAlignComplete && extNavPosRecent())) {
-            return fail("POSZ");
+            return __fail("POSZ");
         }
         break;
     case AP_NavEKF_Source::SourceZ::NONE:
@@ -952,13 +952,13 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
     case AP_NavEKF_Source::SourceZ::GPS:
         if (!(validOrigin && tiltAlignComplete && yawAlignComplete &&
               (delAngBiasLearned || assume_zero_sideslip()) &&
-              gpsGoodToAlign && gps_recent_for_prearm() && gpsDataNew.have_vz)) {
-            return fail_gps_source("VELZ", true, true);
+              gpsGoodToAlign && __gps_recent_for_prearm() && gpsDataNew.have_vz)) {
+            return __fail_gps_source("VELZ", true, true);
         }
         break;
     case AP_NavEKF_Source::SourceZ::EXTNAV:
         if (!(((imuSampleTime_ms - extNavVelMeasTime_ms) < 250 && useExtNavVel) || readyToUseBodyOdm())) {
-            return fail("VELZ");
+            return __fail("VELZ");
         }
         break;
     case AP_NavEKF_Source::SourceZ::NONE:
@@ -973,27 +973,27 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         break;
     case AP_NavEKF_Source::SourceYaw::COMPASS:
         if (!have_aligned_yaw()) {
-            return fail("YAW");
+            return __fail("YAW");
         }
         break;
     case AP_NavEKF_Source::SourceYaw::GPS:
         if (!using_noncompass_for_yaw()) {
-            return fail("YAW");
+            return __fail("YAW");
         }
         break;
     case AP_NavEKF_Source::SourceYaw::GPS_COMPASS_FALLBACK:
         if (!have_aligned_yaw()) {
-            return fail("YAW");
+            return __fail("YAW");
         }
         break;
     case AP_NavEKF_Source::SourceYaw::EXTNAV:
         if (!using_extnav_for_yaw()) {
-            return fail("YAW");
+            return __fail("YAW");
         }
         break;
     case AP_NavEKF_Source::SourceYaw::GSF:
         if (!using_noncompass_for_yaw()) {
-            return fail("YAW");
+            return __fail("YAW");
         }
         break;
     }
