@@ -167,12 +167,12 @@ public:
     // vision-based ext-nav source scales with altitude (ground sample distance
     // grows ~linearly with height, so its variance grows ~with height squared) -
     // confirmed empirically on a real climb/descent (P[7][7]+P[8][8] vs altitude,
-    // exponent ~2.0, R^2=0.94). lane_pos_var_threshold_base was calibrated against
-    // nominal operating P (~3.2 m² p95) at lane_pos_var_threshold_ref_alt_m; scale
+    // exponent ~2.0, R^2=0.94). LANE_POS_VAR_THRESHOLD_BASE was calibrated against
+    // nominal operating P (~3.2 m² p95) at LANE_POS_VAR_THRESHOLD_REF_ALT_M; scale
     // quadratically with this lane's own current altitude so the same margin holds
     // at other altitudes instead of only at the altitude it was tuned for.
-    static constexpr float lane_pos_var_threshold_base = 5.0f;
-    static constexpr float lane_pos_var_threshold_ref_alt_m = 120.0f;
+    static constexpr float LANE_POS_VAR_THRESHOLD_BASE = 5.0f;
+    static constexpr float LANE_POS_VAR_THRESHOLD_REF_ALT_M = 120.0f;
     float lane_pos_var_threshold(void) const;
 
     // return true if all configured sources for this lane are ready for use during pre-arm checks

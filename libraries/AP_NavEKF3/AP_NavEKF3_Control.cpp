@@ -6,7 +6,7 @@
 
 #include "AP_DAL/AP_DAL.h"
 
-static const int32_t gps_posxy_aiding_max_age_ms = 400;
+static const int32_t GPS_POSXY_AIDING_MAX_AGE_MS = 400;
 
 static bool lane_source_is_recent(
     uint32_t current_time_ms,
@@ -228,17 +228,17 @@ void NavEKF3_core::updateStateIndexLim()
 // set the default yaw source
 void NavEKF3_core::setYawSource()
 {
-    AP_NavEKF_Source::SourceYaw yaw_source = this->yaw_source();
+    AP_NavEKF_Source::SourceYaw yaw_source_new = this->yaw_source();
     if (wasLearningCompass_ms > 0) {
         // can't use compass while it is being calibrated
-        if (yaw_source == AP_NavEKF_Source::SourceYaw::COMPASS) {
-            yaw_source = AP_NavEKF_Source::SourceYaw::NONE;
-        } else if (yaw_source == AP_NavEKF_Source::SourceYaw::GPS_COMPASS_FALLBACK) {
-            yaw_source = AP_NavEKF_Source::SourceYaw::GPS;
+        if (yaw_source_new == AP_NavEKF_Source::SourceYaw::COMPASS) {
+            yaw_source_new = AP_NavEKF_Source::SourceYaw::NONE;
+        } else if (yaw_source_new == AP_NavEKF_Source::SourceYaw::GPS_COMPASS_FALLBACK) {
+            yaw_source_new = AP_NavEKF_Source::SourceYaw::GPS;
         }
     }
-    if (yaw_source != yaw_source_last) {
-        yaw_source_last = yaw_source;
+    if (yaw_source_new != yaw_source_last) {
+        yaw_source_last = yaw_source_new;
         yaw_source_reset = true;
     }
 }
@@ -657,7 +657,7 @@ bool NavEKF3_core::has_required_posxy_aiding(void) const
                lane_source_is_recent(
                    imuSampleTime_ms,
                    lastTimeGpsReceived_ms,
-                   gps_posxy_aiding_max_age_ms);
+                   GPS_POSXY_AIDING_MAX_AGE_MS);
     case AP_NavEKF_Source::SourceXY::BEACON:
         return readyToUseRangeBeacon();
     case AP_NavEKF_Source::SourceXY::EXTNAV:
@@ -760,7 +760,7 @@ const char *NavEKF3_core::posxy_aiding_failure_reason(void) const
         if (!lane_source_is_recent(
                 imuSampleTime_ms,
                 lastTimeGpsReceived_ms,
-                gps_posxy_aiding_max_age_ms)) {
+                GPS_POSXY_AIDING_MAX_AGE_MS)) {
             return "gps stale";
         }
         return "gps unavailable";
@@ -800,8 +800,8 @@ float NavEKF3_core::get_pos_variance_NE(void) const
 float NavEKF3_core::lane_pos_var_threshold(void) const
 {
     const float alt_m = MAX(-stateStruct.position.z, 0.0f);
-    const float scale = sq(alt_m / lane_pos_var_threshold_ref_alt_m);
-    return MAX(lane_pos_var_threshold_base, lane_pos_var_threshold_base * scale);
+    const float scale = sq(alt_m / LANE_POS_VAR_THRESHOLD_REF_ALT_M);
+    return MAX(LANE_POS_VAR_THRESHOLD_BASE, LANE_POS_VAR_THRESHOLD_BASE * scale);
 }
 
 bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_msg_len) const

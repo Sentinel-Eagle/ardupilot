@@ -847,7 +847,7 @@ void NavEKF3_core::FuseVelPosNED()
             if (posCheckPassed || posTimeout || badIMUdata) {
                 // if timed out or outside the specified uncertainty radius, reset to the external sensor
                 // if velocity drift is being constrained, dont reset until gps passes quality checks
-                const bool posVarianceIsTooLarge = (frontend->_gpsGlitchRadiusMax > 0) && (P[8][8] + P[7][7]) > sq(ftype(frontend->_gpsGlitchRadiusMax));
+                const bool posVarianceIsTooLarge = (frontend->_gpsGlitchRadiusMax > 0) && get_pos_variance_NE() > sq(ftype(frontend->_gpsGlitchRadiusMax));
                 if (posTimeout || posVarianceIsTooLarge) {
                     // Hold off hard-resetting onto a GPS fix that is failing the
                     // receiver-side quality checks (degraded reacquisition after a
