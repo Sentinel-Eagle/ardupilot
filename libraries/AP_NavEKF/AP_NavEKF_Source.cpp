@@ -250,12 +250,6 @@ bool AP_NavEKF_Source::haveVelZSource(uint8_t source_set_idx) const
     return _source_set[source_set_idx].velz != SourceZ::NONE;
 }
 
-// get yaw source
-AP_NavEKF_Source::SourceYaw AP_NavEKF_Source::getYawSource() const
-{
-    return getYawSource(active_source_set);
-}
-
 AP_NavEKF_Source::SourceYaw AP_NavEKF_Source::getYawSource(uint8_t source_set_idx) const
 {
     if (source_set_idx >= AP_NAKEKF_SOURCE_SET_MAX) {
@@ -268,12 +262,6 @@ AP_NavEKF_Source::SourceYaw AP_NavEKF_Source::getYawSource(uint8_t source_set_id
     }
 
     return _source_set[source_set_idx].yaw;
-}
-
-// get pos Z source
-AP_NavEKF_Source::SourceZ AP_NavEKF_Source::getPosZSource() const
-{
-    return getPosZSource(active_source_set);
 }
 
 AP_NavEKF_Source::SourceZ AP_NavEKF_Source::getPosZSource(uint8_t source_set_idx) const

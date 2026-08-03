@@ -63,7 +63,7 @@ public:
     // get current position source
     SourceXY getPosXYSource() const { return getPosXYSource(active_source_set); }
     SourceXY getPosXYSource(uint8_t source_set_idx) const;
-    SourceZ getPosZSource() const;
+    SourceZ getPosZSource() const { return getPosZSource(active_source_set); }
     SourceZ getPosZSource(uint8_t source_set_idx) const;
 
     // set position, velocity and yaw sources to either 0=primary, 1=secondary, 2=tertiary
@@ -87,7 +87,7 @@ public:
     bool haveVelZSource(uint8_t source_set_idx) const;
 
     // get yaw source
-    SourceYaw getYawSource() const;
+    SourceYaw getYawSource() const { return getYawSource(active_source_set); }
     SourceYaw getYawSource(uint8_t source_set_idx) const;
 
     // sensor-specific helper functions
