@@ -66,9 +66,9 @@ bool NavEKF3_core::pre_arm_check(bool requires_position, char *failure_msg, uint
         }
 
         if (uses_velxy_source(AP_NavEKF_Source::SourceXY::GPS)) {
-            const float max_vel_innovation = 2.0;
+            const float MAX_VEL_INNOVATION = 2.0;
             const float hvel_innovation = sqrtf(sq(innovVelPos[0])+sq(innovVelPos[1]));
-            if (hvel_innovation > max_vel_innovation) {
+            if (hvel_innovation > MAX_VEL_INNOVATION) {
                 // more than 2 m/s horizontal velocity innovation on the ground
                 dal.snprintf(failure_msg, failure_msg_len,
                              "EKF3[%u] vel error %.1f", unsigned(core_index)+1, hvel_innovation);
