@@ -654,6 +654,8 @@ bool NavEKF3_core::extNavPosRecent(void) const
 bool NavEKF3_core::has_required_posxy_aiding(void) const
 {
     switch (posxy_source()) {
+    case AP_NavEKF_Source::SourceXY::NONE:
+        return true;
     case AP_NavEKF_Source::SourceXY::GPS:
         return validOrigin &&
                (delAngBiasLearned || assume_zero_sideslip()) &&
@@ -672,7 +674,6 @@ bool NavEKF3_core::has_required_posxy_aiding(void) const
 #else
         return false;
 #endif
-    case AP_NavEKF_Source::SourceXY::NONE:
     case AP_NavEKF_Source::SourceXY::WHEEL_ENCODER:
         return true;
     }
