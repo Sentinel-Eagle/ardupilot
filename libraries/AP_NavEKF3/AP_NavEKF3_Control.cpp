@@ -866,14 +866,16 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         return false;
 #endif
     };
-    const auto __fail_gps_source = [&](const char *field_name, const bool require_yaw, const bool require_vz) -> bool {
+    // All current GPS source checks require yaw alignment. Add a require_yaw
+    // argument if a source that can be ready without yaw alignment is added.
+    const auto __fail_gps_source = [&](const char *field_name, const bool require_vz) -> bool {
         const bool bias_ok = delAngBiasLearned || assume_zero_sideslip();
         const char *reason = "gps unavailable";
         if (!validOrigin) {
             reason = "gps no origin";
         } else if (!tiltAlignComplete) {
             reason = "tilt unaligned";
-        } else if (require_yaw && !yawAlignComplete) {
+        } else if (!yawAlignComplete) {
             reason = "yaw unaligned";
         } else if (!bias_ok) {
             reason = "gps bias learning";
@@ -906,7 +908,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
     switch (posxy_source()) {
     case AP_NavEKF_Source::SourceXY::GPS:
         if (!__gps_posxy_ready_for_prearm()) {
-            return __fail_gps_source("POSXY", true, false);
+            return __fail_gps_source("POSXY", false);
         }
         break;
     case AP_NavEKF_Source::SourceXY::BEACON:
@@ -930,7 +932,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         if (!(validOrigin && tiltAlignComplete && yawAlignComplete &&
               (delAngBiasLearned || assume_zero_sideslip()) &&
               gpsGoodToAlign && __gps_recent_for_prearm())) {
-            return __fail_gps_source("VELXY", true, false);
+            return __fail_gps_source("VELXY", false);
         }
         break;
     case AP_NavEKF_Source::SourceXY::OPTFLOW:
@@ -973,7 +975,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         if (!(validOrigin && tiltAlignComplete && yawAlignComplete &&
               (delAngBiasLearned || assume_zero_sideslip()) &&
               gpsGoodToAlign && __gps_recent_for_prearm())) {
-            return __fail_gps_source("POSZ", true, false);
+            return __fail_gps_source("POSZ", false);
         }
         break;
     case AP_NavEKF_Source::SourceZ::BEACON:
@@ -1000,7 +1002,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         if (!(validOrigin && tiltAlignComplete && yawAlignComplete &&
               (delAngBiasLearned || assume_zero_sideslip()) &&
               gpsGoodToAlign && __gps_recent_for_prearm() && gpsDataNew.have_vz)) {
-            return __fail_gps_source("VELZ", true, true);
+            return __fail_gps_source("VELZ", true);
         }
         break;
     case AP_NavEKF_Source::SourceZ::EXTNAV:
