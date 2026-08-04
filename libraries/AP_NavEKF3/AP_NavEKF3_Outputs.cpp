@@ -60,10 +60,10 @@ bool NavEKF3_core::pre_arm_check(bool requires_position, char *failure_msg, uint
             PV_AidingMode == AID_ABSOLUTE &&
             posxy_source_has_absolute_measurement(posxy_source()) &&
             !has_acceptable_posxy_variance()) {
-            const float hpos_innovation = sqrtf(sq(innovVelPos[3])+sq(innovVelPos[4]));
+            const float pos_variance = get_pos_variance_NE();
             dal.snprintf(failure_msg, failure_msg_len,
-                         "EKF3[%u] pos error %.1f",
-                         unsigned(core_index)+1, (double)hpos_innovation);
+                         "EKF3[%u] pos variance %.1f",
+                         unsigned(core_index)+1, (double)pos_variance);
             return false;
         }
 
