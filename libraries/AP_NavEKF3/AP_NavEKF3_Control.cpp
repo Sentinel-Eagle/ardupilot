@@ -681,44 +681,63 @@ bool NavEKF3_core::has_required_posxy_aiding(void) const
     return true;
 }
 
-bool NavEKF3_core::has_required_yaw_aiding(void) const
+NavEKF3_core::YawAidingFailureReason NavEKF3_core::yaw_aiding_failure_reason(void) const
 {
     switch (yaw_source()) {
     case AP_NavEKF_Source::SourceYaw::NONE:
-        return true;
+        return YawAidingFailureReason::NONE;
     case AP_NavEKF_Source::SourceYaw::COMPASS:
-        return use_compass() && !magTimeout;
+        if (magTimeout) {
+            return YawAidingFailureReason::COMPASS_STALE;
+        }
+        if (!use_compass()) {
+            return YawAidingFailureReason::COMPASS_UNAVAILABLE;
+        }
+        return YawAidingFailureReason::NONE;
     case AP_NavEKF_Source::SourceYaw::GPS:
-        return using_noncompass_for_yaw();
+        return using_noncompass_for_yaw() ? YawAidingFailureReason::NONE : YawAidingFailureReason::GPS_YAW_STALE;
     case AP_NavEKF_Source::SourceYaw::GPS_COMPASS_FALLBACK:
-        return using_noncompass_for_yaw() ||
-               (gps_yaw_mag_fallback_active && use_compass() && !magTimeout);
+        if (using_noncompass_for_yaw()) {
+            return YawAidingFailureReason::NONE;
+        }
+        if (!gps_yaw_mag_fallback_active) {
+            return YawAidingFailureReason::GPS_YAW_STALE;
+        }
+        if (magTimeout) {
+            return YawAidingFailureReason::COMPASS_STALE;
+        }
+        if (!use_compass()) {
+            return YawAidingFailureReason::COMPASS_UNAVAILABLE;
+        }
+        return YawAidingFailureReason::NONE;
     case AP_NavEKF_Source::SourceYaw::EXTNAV:
-        return using_extnav_for_yaw();
+        return using_extnav_for_yaw() ? YawAidingFailureReason::NONE : YawAidingFailureReason::EXTNAV_YAW_STALE;
     case AP_NavEKF_Source::SourceYaw::GSF:
-        return using_noncompass_for_yaw();
+        return using_noncompass_for_yaw() ? YawAidingFailureReason::NONE : YawAidingFailureReason::GSF_YAW_UNAVAILABLE;
     }
 
-    return true;
+    return YawAidingFailureReason::NONE;
 }
 
-const char *NavEKF3_core::yaw_aiding_failure_reason(void) const
+bool NavEKF3_core::has_required_yaw_aiding(void) const
 {
-    switch (yaw_source()) {
-    case AP_NavEKF_Source::SourceYaw::NONE:
+    return yaw_aiding_failure_reason() == YawAidingFailureReason::NONE;
+}
+
+const char *NavEKF3_core::yaw_aiding_failure_reason_string(YawAidingFailureReason reason)
+{
+    switch (reason) {
+    case YawAidingFailureReason::NONE:
         return "yaw unavailable";
-    case AP_NavEKF_Source::SourceYaw::COMPASS:
-        return magTimeout ? "compass stale" : "compass unavailable";
-    case AP_NavEKF_Source::SourceYaw::GPS:
+    case YawAidingFailureReason::COMPASS_UNAVAILABLE:
+        return "compass unavailable";
+    case YawAidingFailureReason::COMPASS_STALE:
+        return "compass stale";
+    case YawAidingFailureReason::GPS_YAW_STALE:
         return "gps yaw stale";
-    case AP_NavEKF_Source::SourceYaw::GPS_COMPASS_FALLBACK:
-        if (gps_yaw_mag_fallback_active) {
-            return magTimeout ? "compass stale" : "compass unavailable";
-        }
-        return "gps yaw stale";
-    case AP_NavEKF_Source::SourceYaw::EXTNAV:
+    case YawAidingFailureReason::EXTNAV_YAW_STALE:
         return "extnav yaw stale";
-    case AP_NavEKF_Source::SourceYaw::GSF:
+    case YawAidingFailureReason::GSF_YAW_UNAVAILABLE:
         return "gsf yaw unavailable";
     }
 

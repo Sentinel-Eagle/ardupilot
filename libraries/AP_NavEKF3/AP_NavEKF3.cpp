@@ -70,7 +70,7 @@ static const char *lane_block_reason(const NavEKF3_core &candidate)
     case LaneBlockReason::YAW_UNALIGNED:
         return "yaw unaligned";
     case LaneBlockReason::LOST_YAW_AIDING:
-        return candidate.yaw_aiding_failure_reason();
+        return NavEKF3_core::yaw_aiding_failure_reason_string(candidate.yaw_aiding_failure_reason());
     case LaneBlockReason::YAW_VARIANCE_HIGH:
         return "yaw variance high";
     case LaneBlockReason::LOST_POS_AIDING:

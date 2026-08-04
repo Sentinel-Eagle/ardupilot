@@ -148,9 +148,21 @@ public:
     bool has_required_posxy_aiding(void) const;
     const char *posxy_aiding_failure_reason(void) const;
 
+    enum class YawAidingFailureReason : uint8_t {
+        NONE,
+        COMPASS_UNAVAILABLE,
+        COMPASS_STALE,
+        GPS_YAW_STALE,
+        EXTNAV_YAW_STALE,
+        GSF_YAW_UNAVAILABLE,
+    };
+
+    // return the reason the configured yaw aiding source for this lane is unavailable
+    YawAidingFailureReason yaw_aiding_failure_reason(void) const;
+    static const char *yaw_aiding_failure_reason_string(YawAidingFailureReason reason);
+
     // return true if the configured yaw aiding source for this lane is currently available
     bool has_required_yaw_aiding(void) const;
-    const char *yaw_aiding_failure_reason(void) const;
 
     // return true if the yaw innovation tests are within the normal acceptance limit
     bool has_acceptable_yaw_variance(void) const;
