@@ -102,8 +102,8 @@ public:
     // An out of range instance (eg -1) returns data for the primary instance
     void getAccelBias(int8_t instance, Vector3f &accelBias) const;
 
-    //returns index of the active source set used
-    uint8_t get_active_source_set() const;
+    // returns the active source set used
+    AP_NavEKF_Source::SourceSetSelection get_active_source_set() const;
 
     // reset body axis gyro bias estimates
     void resetGyroBias(void);
@@ -336,8 +336,8 @@ public:
      */
     void requestYawReset(void);
 
-    // set position, velocity and yaw sources to either 0=primary, 1=secondary, 2=tertiary
-    void setPosVelYawSourceSet(uint8_t source_set_idx);
+    // set position, velocity and yaw sources
+    void setPosVelYawSourceSet(AP_NavEKF_Source::SourceSetSelection source_set);
 
     // write EKF information to on-board logs
     void Log_Write();

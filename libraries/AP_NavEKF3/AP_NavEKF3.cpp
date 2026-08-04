@@ -1157,8 +1157,8 @@ void NavEKF3::UpdateFilter(void)
         }
     }
 
-    if (sources.get_active_source_set() != get_active_source_set()) {
-        sources.setPosVelYawSourceSet((AP_NavEKF_Source::SourceSetSelection)get_active_source_set());
+    if (sources.get_active_source_set() != uint8_t(get_active_source_set())) {
+        sources.setPosVelYawSourceSet(get_active_source_set());
     }
 }
 
@@ -1211,13 +1211,14 @@ void NavEKF3::requestYawReset(void)
     }
 }
 
-// set position, velocity and yaw sources to either 0=primary, 1=secondary, 2=tertiary
-void NavEKF3::setPosVelYawSourceSet(uint8_t source_set_idx)
+// set position, velocity and yaw sources
+void NavEKF3::setPosVelYawSourceSet(AP_NavEKF_Source::SourceSetSelection source_set)
 {
+    const uint8_t source_set_idx = uint8_t(source_set);
     if (source_set_idx < AP_NAKEKF_SOURCE_SET_MAX) {
         dal.log_event3(AP_DAL::Event(uint8_t(AP_DAL::Event::setSourceSet0)+source_set_idx));
     }
-    sources.setPosVelYawSourceSet((AP_NavEKF_Source::SourceSetSelection)source_set_idx);
+    sources.setPosVelYawSourceSet(source_set);
 }
 
 // Check basic filter health metrics and return a consolidated health status
@@ -1240,7 +1241,7 @@ bool NavEKF3::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
 
     // check if using compass (i.e. EK3_SRCn_YAW) with deprecated MAG_CAL values (5 was EXTERNAL_YAW, 6 was EXTERNAL_YAW_FALLBACK)
     const int8_t magCalParamVal = _magCal.get();
-    const AP_NavEKF_Source::SourceYaw yaw_source = sources.getYawSource(get_active_source_set());
+    const AP_NavEKF_Source::SourceYaw yaw_source = sources.getYawSource(uint8_t(get_active_source_set()));
     if (((magCalParamVal == 5) || (magCalParamVal == 6)) && (yaw_source != AP_NavEKF_Source::SourceYaw::GPS)) {
         // yaw source is configured to use compass but MAG_CAL valid is deprecated
         dal.snprintf(failure_msg, failure_msg_len, "EK3_MAG_CAL and EK3_SRC1_YAW inconsistent");
@@ -1374,9 +1375,9 @@ void NavEKF3::getAccelBias(int8_t instance, Vector3f &accelBias) const
 }
 
 // returns active source set used by EKF3
-uint8_t NavEKF3::get_active_source_set() const
+AP_NavEKF_Source::SourceSetSelection NavEKF3::get_active_source_set() const
 {
-    return MIN(primary, uint8_t(AP_NAKEKF_SOURCE_SET_MAX - 1));
+    return AP_NavEKF_Source::SourceSetSelection(MIN(primary, uint8_t(AP_NAKEKF_SOURCE_SET_MAX - 1)));
 }
 
 // reset body axis gyro bias estimates
@@ -1653,19 +1654,20 @@ bool NavEKF3::using_extnav_for_yaw() const
 // check if configured to use GPS for horizontal position estimation
 bool NavEKF3::configuredToUseGPSForPosXY(void) const
 {
-    return sources.getPosXYSource(get_active_source_set()) == AP_NavEKF_Source::SourceXY::GPS;
+    return sources.getPosXYSource(uint8_t(get_active_source_set())) == AP_NavEKF_Source::SourceXY::GPS;
 }
 
 // check if configured to use GPS for vertical position estimation
 bool NavEKF3::configuredToUseGPSForPosZ(void) const
 {
-    return sources.getPosZSource(get_active_source_set()) == AP_NavEKF_Source::SourceZ::GPS;
+    return sources.getPosZSource(uint8_t(get_active_source_set())) == AP_NavEKF_Source::SourceZ::GPS;
 }
 
 bool NavEKF3::configuredForExtNavPosNoVel(void) const
 {
-    return (sources.getPosXYSource(get_active_source_set()) == AP_NavEKF_Source::SourceXY::EXTNAV) &&
-           (sources.getVelXYSource(get_active_source_set()) == AP_NavEKF_Source::SourceXY::NONE);
+    const uint8_t source_set_idx = uint8_t(get_active_source_set());
+    return (sources.getPosXYSource(source_set_idx) == AP_NavEKF_Source::SourceXY::EXTNAV) &&
+           (sources.getVelXYSource(source_set_idx) == AP_NavEKF_Source::SourceXY::NONE);
 }
 
 // write the raw optical flow measurements

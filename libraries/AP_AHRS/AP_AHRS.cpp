@@ -3418,7 +3418,7 @@ void AP_AHRS::request_yaw_reset(void)
 void AP_AHRS::set_posvelyaw_source_set(AP_NavEKF_Source::SourceSetSelection source_set_idx)
 {
 #if HAL_NAVEKF3_AVAILABLE
-    EKF3.setPosVelYawSourceSet((uint8_t)source_set_idx);
+    EKF3.setPosVelYawSourceSet(source_set_idx);
 #endif
 }
 
@@ -3426,7 +3426,7 @@ void AP_AHRS::set_posvelyaw_source_set(AP_NavEKF_Source::SourceSetSelection sour
 uint8_t AP_AHRS::get_posvelyaw_source_set() const
 {
 #if HAL_NAVEKF3_AVAILABLE
-    return EKF3.get_active_source_set();
+    return uint8_t(EKF3.get_active_source_set());
 #else
     return 0;
 #endif   
