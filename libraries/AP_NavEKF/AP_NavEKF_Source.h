@@ -108,6 +108,9 @@ public:
     // return true if ext nav is enabled on any source
     bool ext_nav_enabled(void) const;
 
+    // return true if ext nav is enabled in the specified source set
+    bool ext_nav_enabled(uint8_t source_set_idx) const;
+
     // return true if GPS yaw is enabled on any source
     bool gps_yaw_enabled(void) const;
 

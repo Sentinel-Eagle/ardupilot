@@ -1732,12 +1732,7 @@ void NavEKF3::writeExtNavData(const Vector3f &pos, const Quaternion &quat, float
     if (core) {
         for (uint8_t i=0; i<num_cores; i++) {
             const uint8_t source_set_idx = MIN(i, uint8_t(AP_NAKEKF_SOURCE_SET_MAX - 1));
-            const bool uses_extnav = sources.getPosXYSource(source_set_idx) == AP_NavEKF_Source::SourceXY::EXTNAV ||
-                sources.getPosZSource(source_set_idx) == AP_NavEKF_Source::SourceZ::EXTNAV ||
-                sources.useVelXYSource(AP_NavEKF_Source::SourceXY::EXTNAV, source_set_idx) ||
-                sources.useVelZSource(AP_NavEKF_Source::SourceZ::EXTNAV, source_set_idx) ||
-                sources.getYawSource(source_set_idx) == AP_NavEKF_Source::SourceYaw::EXTNAV;
-            if (uses_extnav) {
+            if (sources.ext_nav_enabled(source_set_idx)) {
                 core[i].writeExtNavData(pos, quat, posErr, angErr, timeStamp_ms, delay_ms, resetTime_ms);
             }
         }

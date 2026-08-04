@@ -529,28 +529,28 @@ bool AP_NavEKF_Source::pre_arm_check(bool requires_position, char *failure_msg, 
     return true;
 }
 
-// return true if ext nav is enabled on any source
 bool AP_NavEKF_Source::ext_nav_enabled(void) const
 {
     for (uint8_t i=0; i<AP_NAKEKF_SOURCE_SET_MAX; i++) {
-        const auto &src = _source_set[i];
-        if (src.posxy == SourceXY::EXTNAV) {
-            return true;
-        }
-        if (src.posz == SourceZ::EXTNAV) {
-            return true;
-        }
-        if (src.velxy == SourceXY::EXTNAV) {
-            return true;
-        }
-        if (src.velz == SourceZ::EXTNAV) {
-            return true;
-        }
-        if (src.yaw == SourceYaw::EXTNAV) {
+        if (ext_nav_enabled(i)) {
             return true;
         }
     }
     return false;
+}
+
+bool AP_NavEKF_Source::ext_nav_enabled(uint8_t source_set_idx) const
+{
+    if (source_set_idx >= AP_NAKEKF_SOURCE_SET_MAX) {
+        return false;
+    }
+
+    const auto &src = _source_set[source_set_idx];
+    return src.posxy == SourceXY::EXTNAV ||
+           src.posz == SourceZ::EXTNAV ||
+           src.velxy == SourceXY::EXTNAV ||
+           src.velz == SourceZ::EXTNAV ||
+           src.yaw == SourceYaw::EXTNAV;
 }
 
 // return true if wheel encoder is enabled on any source
