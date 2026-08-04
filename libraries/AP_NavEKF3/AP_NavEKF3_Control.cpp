@@ -786,23 +786,21 @@ const char *NavEKF3_core::yaw_aiding_failure_reason_string(YawAidingFailureReaso
 
 bool NavEKF3_core::has_acceptable_yaw_variance(void) const
 {
-    const auto compass_yaw_variance_ok = [&]() {
-        return !magTimeout &&
+    bool compass_yaw_variance_ok = !magTimeout &&
                yawTestRatio < 1.0f &&
                magTestRatio.x < 1.0f &&
                magTestRatio.y < 1.0f &&
                magTestRatio.z < 1.0f;
-    };
 
     switch (yaw_source()) {
     case AP_NavEKF_Source::SourceYaw::NONE:
         return true;
     case AP_NavEKF_Source::SourceYaw::COMPASS:
-        return compass_yaw_variance_ok();
+        return compass_yaw_variance_ok;
     case AP_NavEKF_Source::SourceYaw::GPS:
         return true;
     case AP_NavEKF_Source::SourceYaw::GPS_COMPASS_FALLBACK:
-        return !gps_yaw_mag_fallback_active || compass_yaw_variance_ok();
+        return !gps_yaw_mag_fallback_active || compass_yaw_variance_ok;
     case AP_NavEKF_Source::SourceYaw::EXTNAV:
         return true;
     case AP_NavEKF_Source::SourceYaw::GSF:
