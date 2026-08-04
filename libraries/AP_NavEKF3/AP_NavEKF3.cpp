@@ -1377,7 +1377,7 @@ void NavEKF3::getAccelBias(int8_t instance, Vector3f &accelBias) const
 // returns active source set used by EKF3
 AP_NavEKF_Source::SourceSetSelection NavEKF3::get_active_source_set() const
 {
-    return AP_NavEKF_Source::SourceSetSelection(MIN(primary, uint8_t(AP_NAKEKF_SOURCE_SET_MAX - 1)));
+    return AP_NavEKF_Source::SourceSetSelection(primary);
 }
 
 // reset body axis gyro bias estimates
@@ -1731,8 +1731,7 @@ void NavEKF3::writeExtNavData(const Vector3f &pos, const Quaternion &quat, float
 
     if (core) {
         for (uint8_t i=0; i<num_cores; i++) {
-            const uint8_t source_set_idx = MIN(i, uint8_t(AP_NAKEKF_SOURCE_SET_MAX - 1));
-            if (sources.ext_nav_enabled(source_set_idx)) {
+            if (sources.ext_nav_enabled(i)) {
                 core[i].writeExtNavData(pos, quat, posErr, angErr, timeStamp_ms, delay_ms, resetTime_ms);
             }
         }
@@ -1751,9 +1750,8 @@ void NavEKF3::writeExtNavVelData(const Vector3f &vel, float err, uint32_t timeSt
 
     if (core) {
         for (uint8_t i=0; i<num_cores; i++) {
-            const uint8_t source_set_idx = MIN(i, uint8_t(AP_NAKEKF_SOURCE_SET_MAX - 1));
-            if (sources.useVelXYSource(AP_NavEKF_Source::SourceXY::EXTNAV, source_set_idx) ||
-                sources.useVelZSource(AP_NavEKF_Source::SourceZ::EXTNAV, source_set_idx)) {
+            if (sources.useVelXYSource(AP_NavEKF_Source::SourceXY::EXTNAV, i) ||
+                sources.useVelZSource(AP_NavEKF_Source::SourceZ::EXTNAV, i)) {
                 core[i].writeExtNavVelData(vel, err, timeStamp_ms, delay_ms);
             }
         }
@@ -1778,8 +1776,7 @@ void NavEKF3::writeBodyFrameOdom(float quality, const Vector3f &delPos, const Ve
 
     if (core) {
         for (uint8_t i=0; i<num_cores; i++) {
-            const uint8_t source_set_idx = MIN(i, uint8_t(AP_NAKEKF_SOURCE_SET_MAX - 1));
-            if (sources.useVelXYSource(AP_NavEKF_Source::SourceXY::EXTNAV, source_set_idx)) {
+            if (sources.useVelXYSource(AP_NavEKF_Source::SourceXY::EXTNAV, i)) {
                 core[i].writeBodyFrameOdom(quality, delPos, delAng, delTime, timeStamp_ms, delay_ms, posOffset);
             }
         }

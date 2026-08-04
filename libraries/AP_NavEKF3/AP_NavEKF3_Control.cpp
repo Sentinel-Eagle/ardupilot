@@ -925,7 +925,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         break;
     }
 
-    switch (frontend->sources.getVelXYSource(source_set_index())) {
+    switch (velxy_source()) {
     case AP_NavEKF_Source::SourceXY::GPS:
         if (!(validOrigin && tiltAlignComplete && yawAlignComplete &&
               (delAngBiasLearned || assume_zero_sideslip()) &&
@@ -995,7 +995,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         break;
     }
 
-    switch (frontend->sources.getVelZSource(source_set_index())) {
+    switch (velz_source()) {
     case AP_NavEKF_Source::SourceZ::GPS:
         if (!(validOrigin && tiltAlignComplete && yawAlignComplete &&
               (delAngBiasLearned || assume_zero_sideslip()) &&

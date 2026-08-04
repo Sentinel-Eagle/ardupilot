@@ -16,34 +16,29 @@ NavEKF3_core::NavEKF3_core(NavEKF3 *_frontend, AP_DAL &_dal) :
     lastInitFailReport_ms = 0;
 }
 
-uint8_t NavEKF3_core::source_set_index(void) const
-{
-    return MIN(core_index, uint8_t(AP_NAKEKF_SOURCE_SET_MAX - 1));
-}
-
 bool NavEKF3_core::uses_posxy_source(AP_NavEKF_Source::SourceXY source) const
 {
-    return frontend->sources.getPosXYSource(source_set_index()) == source;
+    return frontend->sources.getPosXYSource(core_index) == source;
 }
 
 bool NavEKF3_core::uses_velxy_source(AP_NavEKF_Source::SourceXY source) const
 {
-    return frontend->sources.useVelXYSource(source, source_set_index());
+    return frontend->sources.useVelXYSource(source, core_index);
 }
 
 bool NavEKF3_core::uses_posz_source(AP_NavEKF_Source::SourceZ source) const
 {
-    return frontend->sources.getPosZSource(source_set_index()) == source;
+    return frontend->sources.getPosZSource(core_index) == source;
 }
 
 bool NavEKF3_core::uses_velz_source(AP_NavEKF_Source::SourceZ source) const
 {
-    return frontend->sources.useVelZSource(source, source_set_index());
+    return frontend->sources.useVelZSource(source, core_index);
 }
 
 bool NavEKF3_core::has_velz_source(void) const
 {
-    return frontend->sources.haveVelZSource(source_set_index());
+    return frontend->sources.haveVelZSource(core_index);
 }
 
 bool NavEKF3_core::uses_gps_yaw_source(void) const
@@ -64,22 +59,27 @@ bool NavEKF3_core::uses_any_gps_source(void) const
 
 AP_NavEKF_Source::SourceXY NavEKF3_core::posxy_source(void) const
 {
-    return frontend->sources.getPosXYSource(source_set_index());
+    return frontend->sources.getPosXYSource(core_index);
 }
 
 AP_NavEKF_Source::SourceXY NavEKF3_core::velxy_source(void) const
 {
-    return frontend->sources.getVelXYSource(source_set_index());
+    return frontend->sources.getVelXYSource(core_index);
 }
 
 AP_NavEKF_Source::SourceZ NavEKF3_core::posz_source(void) const
 {
-    return frontend->sources.getPosZSource(source_set_index());
+    return frontend->sources.getPosZSource(core_index);
+}
+
+AP_NavEKF_Source::SourceZ NavEKF3_core::velz_source(void) const
+{
+    return frontend->sources.getVelZSource(core_index);
 }
 
 AP_NavEKF_Source::SourceYaw NavEKF3_core::yaw_source(void) const
 {
-    return frontend->sources.getYawSource(source_set_index());
+    return frontend->sources.getYawSource(core_index);
 }
 
 bool NavEKF3_core::has_absolute_horizontal_position_source(void) const
@@ -100,7 +100,7 @@ bool NavEKF3_core::has_absolute_horizontal_position_source(void) const
 bool NavEKF3_core::has_imu_only_horizontal_position_source(void) const
 {
     return posxy_source() == AP_NavEKF_Source::SourceXY::NONE &&
-           frontend->sources.getVelXYSource(source_set_index()) == AP_NavEKF_Source::SourceXY::NONE;
+           velxy_source() == AP_NavEKF_Source::SourceXY::NONE;
 }
 
 bool NavEKF3_core::align_horizontal_position_to(const NavEKF3_core &source_core)
@@ -182,7 +182,7 @@ bool NavEKF3_core::setup_core(uint8_t _imu_index, uint8_t _core_index)
                                   ))));
 
     // GPS sensing can have large delays and should not be included if disabled
-    if (frontend->sources.usingGPS()) {
+    if (uses_any_gps_source()) {
         // Wait for the configuration of all GPS units to be confirmed. Until this has occurred the GPS driver cannot provide a correct time delay
         float gps_delay_sec = 0;
         if (!dal.gps().get_lag(selected_gps, gps_delay_sec)) {

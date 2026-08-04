@@ -540,6 +540,8 @@ private:
     } pos_down_reset_data;
 
 #define MAX_EKF_CORES     3 // maximum allowed EKF Cores to be instantiated
+    static_assert(MAX_EKF_CORES == AP_NAKEKF_SOURCE_SET_MAX,
+                  "EKF cores and source sets must have a one-to-one mapping");
     
     bool runCoreSelection;                          // true when the primary core has stabilised and the core selection logic can be started
     bool coreSetupRequired[MAX_EKF_CORES];          // true when this core index needs to be setup

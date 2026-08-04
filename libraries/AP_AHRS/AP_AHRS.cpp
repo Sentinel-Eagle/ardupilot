@@ -3414,12 +3414,11 @@ void AP_AHRS::request_yaw_reset(void)
     }
 }
 
-// set position, velocity and yaw sources to either 0=primary, 1=secondary, 2=tertiary
-void AP_AHRS::set_posvelyaw_source_set(AP_NavEKF_Source::SourceSetSelection source_set_idx)
+bool AP_AHRS::set_posvelyaw_source_set(AP_NavEKF_Source::SourceSetSelection)
 {
-#if HAL_NAVEKF3_AVAILABLE
-    EKF3.setPosVelYawSourceSet(source_set_idx);
-#endif
+    // Source sets are permanently mapped one-to-one to EKF3 lanes.
+    // Runtime lane selection is controlled through EK3_PRIMARY instead.
+    return false;
 }
 
 //returns active source set used, 0=primary, 1=secondary, 2=tertiary

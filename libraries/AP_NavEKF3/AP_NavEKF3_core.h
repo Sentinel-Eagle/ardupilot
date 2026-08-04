@@ -1676,8 +1676,7 @@ private:
     void update_baro_selection(void);
     void update_airspeed_selection(void);
 
-    // source-set mapping for this lane/core
-    uint8_t source_set_index(void) const;
+    // source selection for this lane/core
     bool uses_posxy_source(AP_NavEKF_Source::SourceXY source) const;
     bool uses_velxy_source(AP_NavEKF_Source::SourceXY source) const;
     bool uses_posz_source(AP_NavEKF_Source::SourceZ source) const;
@@ -1688,6 +1687,7 @@ private:
     AP_NavEKF_Source::SourceXY posxy_source(void) const;
     AP_NavEKF_Source::SourceXY velxy_source(void) const;
     AP_NavEKF_Source::SourceZ posz_source(void) const;
+    AP_NavEKF_Source::SourceZ velz_source(void) const;
     AP_NavEKF_Source::SourceYaw yaw_source(void) const;
 
     // selected and preferred sensor instances. We separate selected

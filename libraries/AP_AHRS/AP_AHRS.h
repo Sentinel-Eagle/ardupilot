@@ -416,8 +416,8 @@ public:
     // request EKF yaw reset to try and avoid the need for an EKF lane switch or failsafe
     void request_yaw_reset(void);
 
-    // set position, velocity and yaw sources to either 0=primary, 1=secondary, 2=tertiary
-    void set_posvelyaw_source_set(AP_NavEKF_Source::SourceSetSelection source_set_idx);
+    // returns false when runtime source-set switching is unsupported
+    bool set_posvelyaw_source_set(AP_NavEKF_Source::SourceSetSelection source_set_idx) WARN_IF_UNUSED;
 
     //returns index of active source set used, 0=primary, 1=secondary, 2=tertiary
     uint8_t get_posvelyaw_source_set() const;
