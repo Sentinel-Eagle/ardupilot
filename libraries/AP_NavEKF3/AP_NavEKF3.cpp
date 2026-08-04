@@ -101,7 +101,7 @@ static void send_lane_switch_reason(
         reason);
 }
 
-std::optional<uint8_t> NavEKF3::forced_primary_core(void) const
+std::optional<uint8_t> NavEKF3::requested_forced_primary_core(void) const
 {
     const int8_t forced_primary = _primary_core.get();
     if (forced_primary < 0) {
@@ -116,7 +116,7 @@ uint8_t NavEKF3::desired_primary_core(void) const
         return 0;
     }
 
-    if (const auto forced_primary = forced_primary_core()) {
+    if (const auto forced_primary = requested_forced_primary_core()) {
         return *forced_primary < num_cores ? *forced_primary : primary;
     }
 
@@ -1069,7 +1069,7 @@ void NavEKF3::UpdateFilter(void)
     const bool armed  = dal.get_armed();
 
     uint8_t newPrimaryIndex = primary;
-    if (forced_primary_core().has_value() || (runCoreSelection && armed) || !armed) {
+    if (requested_forced_primary_core().has_value() || (runCoreSelection && armed) || !armed) {
         newPrimaryIndex = desired_primary_core();
     }
 
@@ -1086,14 +1086,14 @@ void NavEKF3::UpdateFilter(void)
             newPrimaryIndex,
             core[oldPrimaryIndex],
             core[newPrimaryIndex],
-            forced_primary_core() == newPrimaryIndex);
+            requested_forced_primary_core() == newPrimaryIndex);
     }
 
-    if (forced_primary_core().has_value()) {
+    if (requested_forced_primary_core().has_value()) {
         last_auto_primary_bad_lane.reset();
         last_auto_primary_bad_reason.reset();
 
-        const uint8_t forced_primary_index = forced_primary_core().value();
+        const uint8_t forced_primary_index = requested_forced_primary_core().value();
         if (forced_primary_index >= num_cores) {
             if (last_forced_primary_invalid_lane != forced_primary_index) {
                 GCS_SEND_TEXT(
@@ -1172,7 +1172,7 @@ void NavEKF3::checkLaneSwitch(void)
 {
     dal.log_event3(AP_DAL::Event::checkLaneSwitch);
 
-    if (forced_primary_core().has_value()) {
+    if (requested_forced_primary_core().has_value()) {
         return;
     }
 
