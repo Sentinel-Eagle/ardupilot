@@ -379,8 +379,6 @@ private:
     uint8_t primary;   // current primary core
     NavEKF3_core *core = nullptr;
     std::optional<uint8_t> last_forced_primary_invalid_lane;
-    std::optional<uint8_t> last_forced_primary_refused_lane;
-    std::optional<uint8_t> last_forced_primary_refused_reason;
     std::optional<uint8_t> last_forced_primary_bad_lane;
     std::optional<uint8_t> last_forced_primary_bad_reason;
     std::optional<uint8_t> last_auto_primary_bad_lane;

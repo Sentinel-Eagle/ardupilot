@@ -116,12 +116,8 @@ uint8_t NavEKF3::desired_primary_core(void) const
         return 0;
     }
 
-    if (forced_primary_core().has_value()) {
-        const uint8_t forced_primary = forced_primary_core().value();
-        if (forced_primary < num_cores && core_is_primary_eligible(core[forced_primary])) {
-            return forced_primary;
-        }
-        return primary < num_cores ? primary : 0;
+    if (const auto forced_primary = forced_primary_core()) {
+        return *forced_primary < num_cores ? *forced_primary : primary;
     }
 
     const uint32_t now_ms = AP::dal().millis();
@@ -1106,23 +1102,6 @@ void NavEKF3::UpdateFilter(void)
                     (unsigned)forced_primary_index);
                 last_forced_primary_invalid_lane = forced_primary_index;
             }
-            last_forced_primary_refused_lane.reset();
-            last_forced_primary_refused_reason.reset();
-            last_forced_primary_bad_lane.reset();
-            last_forced_primary_bad_reason.reset();
-        } else if (forced_primary_index != primary && !core_is_primary_eligible(core[forced_primary_index])) {
-            const uint8_t refused_reason = uint8_t(lane_block_reason_id(core[forced_primary_index]));
-            if (last_forced_primary_refused_lane != forced_primary_index ||
-                last_forced_primary_refused_reason != refused_reason) {
-                GCS_SEND_TEXT(
-                    MAV_SEVERITY_WARNING,
-                    "EKF3 lane req %u refused: %s",
-                    (unsigned)forced_primary_index,
-                    lane_block_reason(core[forced_primary_index]));
-                last_forced_primary_refused_lane = forced_primary_index;
-                last_forced_primary_refused_reason = refused_reason;
-            }
-            last_forced_primary_invalid_lane.reset();
             last_forced_primary_bad_lane.reset();
             last_forced_primary_bad_reason.reset();
         } else if (!core_is_primary_eligible(core[primary])) {
@@ -1138,8 +1117,6 @@ void NavEKF3::UpdateFilter(void)
                 last_forced_primary_bad_reason = bad_reason;
             }
             last_forced_primary_invalid_lane.reset();
-            last_forced_primary_refused_lane.reset();
-            last_forced_primary_refused_reason.reset();
         } else {
             last_forced_primary_invalid_lane.reset();
             if (last_forced_primary_bad_lane.has_value()) {
@@ -1153,8 +1130,6 @@ void NavEKF3::UpdateFilter(void)
         }
     } else {
         last_forced_primary_invalid_lane.reset();
-        last_forced_primary_refused_lane.reset();
-        last_forced_primary_refused_reason.reset();
         last_forced_primary_bad_lane.reset();
         last_forced_primary_bad_reason.reset();
 
