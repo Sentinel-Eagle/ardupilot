@@ -653,32 +653,72 @@ bool NavEKF3_core::extNavPosRecent(void) const
 
 bool NavEKF3_core::has_required_posxy_aiding(void) const
 {
+    return posxy_aiding_failure_reason() == PosXYAidingFailureReason::NONE;
+}
+
+NavEKF3_core::PosXYAidingFailureReason NavEKF3_core::posxy_aiding_failure_reason(void) const
+{
     switch (posxy_source()) {
     case AP_NavEKF_Source::SourceXY::NONE:
-        return true;
+        return PosXYAidingFailureReason::NONE;
     case AP_NavEKF_Source::SourceXY::GPS:
-        return validOrigin &&
-               (delAngBiasLearned || assume_zero_sideslip()) &&
-               gpsGoodToAlign &&
-               lane_source_is_recent(
-                   imuSampleTime_ms,
-                   lastTimeGpsReceived_ms,
-                   GPS_POSXY_AIDING_MAX_AGE_MS);
+        if (!validOrigin) {
+            return PosXYAidingFailureReason::GPS_NO_ORIGIN;
+        }
+        if (!(delAngBiasLearned || assume_zero_sideslip())) {
+            return PosXYAidingFailureReason::GPS_BIAS_LEARNING;
+        }
+        if (!gpsGoodToAlign) {
+            return PosXYAidingFailureReason::GPS_QUALITY_LOW;
+        }
+        if (!lane_source_is_recent(
+                imuSampleTime_ms,
+                lastTimeGpsReceived_ms,
+                GPS_POSXY_AIDING_MAX_AGE_MS)) {
+            return PosXYAidingFailureReason::GPS_STALE;
+        }
+        return PosXYAidingFailureReason::NONE;
     case AP_NavEKF_Source::SourceXY::BEACON:
-        return readyToUseRangeBeacon();
+        return readyToUseRangeBeacon() ?
+            PosXYAidingFailureReason::NONE :
+            PosXYAidingFailureReason::RANGE_BEACON_UNAVAILABLE;
     case AP_NavEKF_Source::SourceXY::EXTNAV:
-        return extNavPosRecent();
+        return extNavPosRecent() ? PosXYAidingFailureReason::NONE : PosXYAidingFailureReason::EXTNAV_STALE;
     case AP_NavEKF_Source::SourceXY::OPTFLOW:
 #if EK3_FEATURE_OPTFLOW_FUSION
-        return readyToUseOptFlow();
+        return readyToUseOptFlow() ? PosXYAidingFailureReason::NONE : PosXYAidingFailureReason::OPTFLOW_UNAVAILABLE;
 #else
-        return false;
+        return PosXYAidingFailureReason::OPTFLOW_UNAVAILABLE;
 #endif
     case AP_NavEKF_Source::SourceXY::WHEEL_ENCODER:
-        return true;
+        return PosXYAidingFailureReason::NONE;
     }
 
-    return true;
+    return PosXYAidingFailureReason::NONE;
+}
+
+const char *NavEKF3_core::posxy_aiding_failure_reason_string(PosXYAidingFailureReason reason)
+{
+    switch (reason) {
+    case PosXYAidingFailureReason::NONE:
+        return "pos aiding unavailable";
+    case PosXYAidingFailureReason::GPS_NO_ORIGIN:
+        return "gps no origin";
+    case PosXYAidingFailureReason::GPS_BIAS_LEARNING:
+        return "gps bias learning";
+    case PosXYAidingFailureReason::GPS_QUALITY_LOW:
+        return "gps quality low";
+    case PosXYAidingFailureReason::GPS_STALE:
+        return "gps stale";
+    case PosXYAidingFailureReason::RANGE_BEACON_UNAVAILABLE:
+        return "range beacon unavailable";
+    case PosXYAidingFailureReason::EXTNAV_STALE:
+        return "extnav stale";
+    case PosXYAidingFailureReason::OPTFLOW_UNAVAILABLE:
+        return "optflow unavailable";
+    }
+
+    return "pos aiding unavailable";
 }
 
 NavEKF3_core::YawAidingFailureReason NavEKF3_core::yaw_aiding_failure_reason(void) const
@@ -770,40 +810,6 @@ bool NavEKF3_core::has_acceptable_yaw_variance(void) const
     }
 
     return true;
-}
-
-const char *NavEKF3_core::posxy_aiding_failure_reason(void) const
-{
-    switch (posxy_source()) {
-    case AP_NavEKF_Source::SourceXY::GPS:
-        if (!validOrigin) {
-            return "gps no origin";
-        }
-        if (!(delAngBiasLearned || assume_zero_sideslip())) {
-            return "gps bias learning";
-        }
-        if (!gpsGoodToAlign) {
-            return "gps quality low";
-        }
-        if (!lane_source_is_recent(
-                imuSampleTime_ms,
-                lastTimeGpsReceived_ms,
-                GPS_POSXY_AIDING_MAX_AGE_MS)) {
-            return "gps stale";
-        }
-        return "gps unavailable";
-    case AP_NavEKF_Source::SourceXY::BEACON:
-        return "range beacon unavailable";
-    case AP_NavEKF_Source::SourceXY::EXTNAV:
-        return extNavPosRecent() ? "extnav unavailable" : "extnav stale";
-    case AP_NavEKF_Source::SourceXY::OPTFLOW:
-        return "optflow unavailable";
-    case AP_NavEKF_Source::SourceXY::NONE:
-    case AP_NavEKF_Source::SourceXY::WHEEL_ENCODER:
-        return "pos aiding unavailable";
-    }
-
-    return "pos aiding unavailable";
 }
 
 bool NavEKF3_core::has_acceptable_posxy_variance(void) const

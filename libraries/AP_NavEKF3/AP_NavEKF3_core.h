@@ -144,9 +144,23 @@ public:
     // Check basic filter health metrics and return a consolidated health status
     bool healthy(void) const;
 
+    enum class PosXYAidingFailureReason : uint8_t {
+        NONE,
+        GPS_NO_ORIGIN,
+        GPS_BIAS_LEARNING,
+        GPS_QUALITY_LOW,
+        GPS_STALE,
+        RANGE_BEACON_UNAVAILABLE,
+        EXTNAV_STALE,
+        OPTFLOW_UNAVAILABLE,
+    };
+
     // return true if the configured horizontal aiding source for this lane is currently available
     bool has_required_posxy_aiding(void) const;
-    const char *posxy_aiding_failure_reason(void) const;
+
+    // return the reason the configured horizontal aiding source for this lane is unavailable
+    PosXYAidingFailureReason posxy_aiding_failure_reason(void) const;
+    static const char *posxy_aiding_failure_reason_string(PosXYAidingFailureReason reason);
 
     enum class YawAidingFailureReason : uint8_t {
         NONE,

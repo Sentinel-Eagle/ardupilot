@@ -74,7 +74,7 @@ static const char *lane_block_reason(const NavEKF3_core &candidate)
     case LaneBlockReason::YAW_VARIANCE_HIGH:
         return "yaw variance high";
     case LaneBlockReason::LOST_POS_AIDING:
-        return candidate.posxy_aiding_failure_reason();
+        return NavEKF3_core::posxy_aiding_failure_reason_string(candidate.posxy_aiding_failure_reason());
     case LaneBlockReason::POS_VARIANCE_HIGH:
         return "pos variance high";
     case LaneBlockReason::RECOVERED:
