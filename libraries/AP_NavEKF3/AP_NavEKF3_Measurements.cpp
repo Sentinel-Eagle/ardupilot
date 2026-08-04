@@ -1105,7 +1105,8 @@ void NavEKF3_core::writeExtNavData(const Vector3f &pos, const Quaternion &quat, 
     timeStamp_ms = timeStamp_ms - delay_ms;
     // Correct for the average intersampling delay due to the filter update rate
     timeStamp_ms -= localFilterTimeStep_ms/2;
-    // Prevent the time stamp falling outside the oldest and newest IMU data in the buffer
+    // Prevent the time stamp falling outside the oldest and newest IMU data in the buffer.
+    // A future sample is treated as current and remains buffered until the fusion horizon catches up.
     timeStamp_ms = MIN(MAX(timeStamp_ms, imuDataDelayed.time_ms), imuSampleTime_ms);
     extNavDataNew.time_ms = timeStamp_ms;
 
@@ -1145,8 +1146,9 @@ void NavEKF3_core::writeExtNavVelData(const Vector3f &vel, float err, uint32_t t
     timeStamp_ms = timeStamp_ms - delay_ms;
     // Correct for the average intersampling delay due to the filter updaterate
     timeStamp_ms -= localFilterTimeStep_ms/2;
-    // Prevent the time stamp falling outside the oldest and newest IMU data in the buffer
-    timeStamp_ms = MIN(MAX(timeStamp_ms,imuDataDelayed.time_ms), imuSampleTime_ms);
+    // Prevent the time stamp falling outside the oldest and newest IMU data in the buffer.
+    // A future sample is treated as current and remains buffered until the fusion horizon catches up.
+    timeStamp_ms = MIN(MAX(timeStamp_ms, imuDataDelayed.time_ms), imuSampleTime_ms);
 
     ext_nav_vel_elements extNavVelNew;
     extNavVelNew.time_ms = timeStamp_ms;
