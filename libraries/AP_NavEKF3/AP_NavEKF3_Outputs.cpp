@@ -54,11 +54,9 @@ bool NavEKF3_core::healthy(void) const
 */
 bool NavEKF3_core::pre_arm_check(bool requires_position, char *failure_msg, uint8_t failure_msg_len) const
 {
-    if (requires_position) {
+    if (requires_position && onGround && PV_AidingMode == AID_ABSOLUTE) {
         // additional checks when position is required, used by pre-arm checks
-        if (onGround &&
-            PV_AidingMode == AID_ABSOLUTE &&
-            posxy_source_has_absolute_measurement(posxy_source()) &&
+        if (posxy_source_has_absolute_measurement(posxy_source()) &&
             !has_acceptable_posxy_variance()) {
             const float pos_variance = get_pos_variance_NE();
             dal.snprintf(failure_msg, failure_msg_len,
@@ -67,15 +65,15 @@ bool NavEKF3_core::pre_arm_check(bool requires_position, char *failure_msg, uint
             return false;
         }
 
-        const float max_vel_innovation = 2.0;
-        const float hvel_innovation = sqrtf(sq(innovVelPos[0])+sq(innovVelPos[1]));
-        if (onGround && PV_AidingMode == AID_ABSOLUTE &&
-            uses_velxy_source(AP_NavEKF_Source::SourceXY::GPS) &&
-            hvel_innovation > max_vel_innovation) {
-            // more than 2 m/s horizontal velocity innovation on the ground
-            dal.snprintf(failure_msg, failure_msg_len,
-                         "EKF3[%u] vel error %.1f", unsigned(core_index)+1, hvel_innovation);
-            return false;
+        if (uses_velxy_source(AP_NavEKF_Source::SourceXY::GPS)) {
+            const float max_vel_innovation = 2.0;
+            const float hvel_innovation = sqrtf(sq(innovVelPos[0])+sq(innovVelPos[1]));
+            if (hvel_innovation > max_vel_innovation) {
+                // more than 2 m/s horizontal velocity innovation on the ground
+                dal.snprintf(failure_msg, failure_msg_len,
+                             "EKF3[%u] vel error %.1f", unsigned(core_index)+1, hvel_innovation);
+                return false;
+            }
         }
     }
 
