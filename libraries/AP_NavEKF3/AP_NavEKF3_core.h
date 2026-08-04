@@ -161,16 +161,9 @@ public:
     // P[7][7]+P[8][8]: NE position state variance (m²), used by lane-selection logic
     float get_pos_variance_NE(void) const;
 
-    // Maximum NE position state variance (P[7][7]+P[8][8]) above which a lane is
-    // considered ineligible as primary. The EKF's steady-state position variance
-    // scales with the square of aiding-source position error, which for a camera/
-    // vision-based ext-nav source scales with altitude (ground sample distance
-    // grows ~linearly with height, so its variance grows ~with height squared) -
-    // confirmed empirically on a real climb/descent (P[7][7]+P[8][8] vs altitude,
-    // exponent ~2.0, R^2=0.94). LANE_POS_VAR_THRESHOLD_BASE was calibrated against
-    // nominal operating P (~3.2 m² p95) at LANE_POS_VAR_THRESHOLD_REF_ALT_M; scale
-    // quadratically with this lane's own current altitude so the same margin holds
-    // at other altitudes instead of only at the altitude it was tuned for.
+    // Maximum NE position state variance above which a lane is
+    // considered ineligible as primary. Our ext-nav has variance that depends
+    // on altitude, so this gets appropriately scaled.
     static constexpr float LANE_POS_VAR_THRESHOLD_BASE = 5.0f;
     static constexpr float LANE_POS_VAR_THRESHOLD_REF_ALT_M = 120.0f;
     float lane_pos_var_threshold(void) const;
