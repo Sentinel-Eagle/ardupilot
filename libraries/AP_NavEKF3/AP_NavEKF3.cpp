@@ -126,8 +126,8 @@ uint8_t NavEKF3::desired_primary_core(void) const
 
     const uint32_t now_ms = AP::dal().millis();
     for (uint8_t core_index = 0; core_index < num_cores; core_index++) {
-        const std::optional<uint32_t> &yaw_stable_since_ms = coreYawVarAcceptSince_ms[core_index];
-        const std::optional<uint32_t> &pos_stable_since_ms = corePosVarAcceptSince_ms[core_index];
+        const auto &yaw_stable_since_ms = coreYawVarAcceptSince_ms[core_index];
+        const auto &pos_stable_since_ms = corePosVarAcceptSince_ms[core_index];
         const bool has_stable_yaw_variance =
             yaw_stable_since_ms.has_value() && now_ms - *yaw_stable_since_ms >= PRIMARY_LANE_VARIANCE_STABILITY_TIME_MS;
         const bool has_stable_posxy_variance =
