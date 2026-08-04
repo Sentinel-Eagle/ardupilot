@@ -138,7 +138,7 @@ uint8_t NavEKF3::desired_primary_core(void) const
         }
     }
 
-    return primary < num_cores ? primary : 0;
+    return primary;
 }
 
 /*
@@ -1136,7 +1136,7 @@ void NavEKF3::UpdateFilter(void)
         const bool any_lane_eligible = std::any_of(core, core + num_cores, core_is_primary_eligible);
 
         if (!any_lane_eligible) {
-            const uint8_t bad_lane = primary < num_cores ? primary : 0;
+            const uint8_t bad_lane = primary;
             const uint8_t bad_reason = uint8_t(lane_block_reason_id(core[bad_lane]));
             if (last_auto_primary_bad_lane != bad_lane ||
                 last_auto_primary_bad_reason != bad_reason) {
