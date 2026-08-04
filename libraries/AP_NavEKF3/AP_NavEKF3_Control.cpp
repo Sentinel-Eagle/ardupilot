@@ -848,7 +848,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
     const auto __extnav_recent_for_prearm = [&]() -> bool {
         return extNavPosRecent();
     };
-    const auto __gps_posxy_ready_for_prearm = [&]() -> bool {
+    const auto __gps_ready_for_prearm = [&]() -> bool {
         return validOrigin &&
                tiltAlignComplete &&
                yawAlignComplete &&
@@ -907,7 +907,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
 
     switch (posxy_source()) {
     case AP_NavEKF_Source::SourceXY::GPS:
-        if (!__gps_posxy_ready_for_prearm()) {
+        if (!__gps_ready_for_prearm()) {
             return __fail_gps_source("POSXY", false);
         }
         break;
@@ -929,9 +929,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
 
     switch (velxy_source()) {
     case AP_NavEKF_Source::SourceXY::GPS:
-        if (!(validOrigin && tiltAlignComplete && yawAlignComplete &&
-              (delAngBiasLearned || assume_zero_sideslip()) &&
-              gpsGoodToAlign && __gps_recent_for_prearm())) {
+        if (!__gps_ready_for_prearm()) {
             return __fail_gps_source("VELXY", false);
         }
         break;
@@ -972,9 +970,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         }
         break;
     case AP_NavEKF_Source::SourceZ::GPS:
-        if (!(validOrigin && tiltAlignComplete && yawAlignComplete &&
-              (delAngBiasLearned || assume_zero_sideslip()) &&
-              gpsGoodToAlign && __gps_recent_for_prearm())) {
+        if (!__gps_ready_for_prearm()) {
             return __fail_gps_source("POSZ", false);
         }
         break;
@@ -999,9 +995,7 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
 
     switch (velz_source()) {
     case AP_NavEKF_Source::SourceZ::GPS:
-        if (!(validOrigin && tiltAlignComplete && yawAlignComplete &&
-              (delAngBiasLearned || assume_zero_sideslip()) &&
-              gpsGoodToAlign && __gps_recent_for_prearm() && gpsDataNew.have_vz)) {
+        if (!__gps_ready_for_prearm() || !gpsDataNew.have_vz) {
             return __fail_gps_source("VELZ", true);
         }
         break;
