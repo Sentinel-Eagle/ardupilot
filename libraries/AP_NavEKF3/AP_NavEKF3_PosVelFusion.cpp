@@ -9,11 +9,6 @@
 static constexpr uint32_t VELOCITY_RESET_MAX_AGE_MS = 250;
 // Maximum measurement age accepted when selecting data for a position reset.
 static constexpr uint32_t POSITION_RESET_MAX_AGE_MS = 250;
-// Maximum measurement age accepted when using airspeed as a velocity reset fallback.
-static constexpr uint32_t AIRSPEED_FALLBACK_MAX_AGE_MS = 1000;
-// Very generous sanity ceiling on a raw airspeed reading used as a velocity reset fallback,
-// independent of the sensor's own healthy()/use() flags.
-static constexpr float AIRSPEED_FALLBACK_MAX_MPS = 100.0f;
 
 /********************************************************
 *                   RESET FUNCTIONS                     *
@@ -67,31 +62,6 @@ void NavEKF3_core::ResetVelocity(resetDataSource velResetSource)
             stateStruct.velocity.y = extNavVelDelayed.vel.y;
             P[5][5] = P[4][4] = sq(extNavVelDelayed.err);
 #endif // EK3_FEATURE_EXTERNAL_NAV
-        } else if (assume_zero_sideslip() &&
-                   tasDataDelayed.allowFusion &&
-                   (imuSampleTime_ms - tasDataDelayed.time_ms) < AIRSPEED_FALLBACK_MAX_AGE_MS &&
-                   is_positive(tasDataDelayed.tas) && tasDataDelayed.tas < AIRSPEED_FALLBACK_MAX_MPS) {
-            // No configured velocity source, but this is a forward-flying
-            // vehicle with a usable airspeed estimate (real sensor, or the
-            // vehicle's default-airspeed fallback, see readAirSpdData()).
-            // Assume it is moving at that airspeed along its current heading,
-            // rather than assuming it is stationary.
-            //
-            // This is meant to have a more reasonable initial velocity variance.
-            // If we have some very off value (too high, or even just simply value 0.0),
-            // then the variance can blow off and we could get a position
-            // reset again soon after.
-            //
-            // The `if` condition is deliberately simple. It's tempting to
-            // use values from EKF related to position/velocity
-            // in the `if` condition or in the math below, but they could be corrupted.
-            // After all the "position reset mechanism" is mean to uncorrupt the data.
-            const ftype yaw = stateStruct.quat.get_euler_yaw();
-            stateStruct.velocity.x = cosF(yaw) * tasDataDelayed.tas;
-            stateStruct.velocity.y = sinF(yaw) * tasDataDelayed.tas;
-            // The airspeed often is smaller than the constant in the MAX,
-            // but we keep it in case the variance gets high due to faulty sensor.
-            P[5][5] = P[4][4] = MAX(tasDataDelayed.tasVariance, sq(5.0f));
         } else {
             stateStruct.velocity.x  = 0.0f;
             stateStruct.velocity.y  = 0.0f;
@@ -152,11 +122,16 @@ void NavEKF3_core::ResetPosition(resetDataSource posResetSource)
 #endif
 
 #if EK3_FEATURE_EXTERNAL_NAV
+        // Use `lastExtNavPosReceived_ms` (raw arrival time), not `extNavDataDelayed.time_ms`
+        // (the delay-buffer-adjusted timestamp, relative to the fusion horizon rather than "now").
+        // The EKF's own fusion horizon delay can be greater than `POSITION_RESET_MAX_AGE_MS`
+        // by construction (it scales with configured sensor delays, e.g. `VISO_DELAY_MS`, and
+        // with this vehicle's own loop rate).
         const bool reset_from_extnav =
             posResetSource == resetDataSource::EXTNAV ||
             (posResetSource == resetDataSource::DEFAULT &&
              posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV &&
-             imuSampleTime_ms - extNavDataDelayed.time_ms < POSITION_RESET_MAX_AGE_MS);
+             imuSampleTime_ms - lastExtNavPosReceived_ms < POSITION_RESET_MAX_AGE_MS);
 #endif
 
         if (reset_from_gps) {
