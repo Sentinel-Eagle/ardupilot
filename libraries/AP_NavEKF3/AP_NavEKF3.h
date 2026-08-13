@@ -564,7 +564,7 @@ private:
     
     bool runCoreSelection;                          // true when the primary core has stabilised and the core selection logic can be started
     bool coreSetupRequired[MAX_EKF_CORES];          // true when this core index needs to be setup
-    uint8_t coreImuIndex[MAX_EKF_CORES];            // IMU index used by this core; may be shared with another core when there are fewer IMUs than lanes
+    uint8_t coreImuIndex[MAX_EKF_CORES];            // IMU index used by this core, it may be shared with another core when there are fewer IMUs than lanes
     std::optional<uint32_t> coreYawVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the yaw variance gate
     std::optional<uint32_t> corePosVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the pos variance gate
     
@@ -587,7 +587,7 @@ private:
     std::optional<uint8_t> requested_forced_primary_core(void) const;
     uint8_t desired_primary_core(void) const;
 
-    // send one GCS status text per lane summarising which IMU (and, where
+    // send one GCS status text per lane summarising which IMU (and also, whenever
     // EK3_AFFINITY assigns it a dedicated one, which GPS/compass/baro/
     // airspeed instance) that lane will use. Called once when the lanes
     // are first created.

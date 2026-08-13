@@ -533,7 +533,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
 
     // @Param: IMU_MASK
     // @DisplayName: Bitmask of active IMUs
-    // @Description: 1 byte bitmap of IMUs available for EKF3 to use. EKF3 always runs MAX_EKF_CORES (3) lanes, one per source set, regardless of how many IMUs are selected here. Lane i uses the min(i, N-1)'th IMU selected by this mask, where N is the number of IMUs selected; lanes beyond the last available IMU share it with the last lane that has one of its own. Set to 1 to use only the first IMU (all three lanes share it), set to 3 to use the first and second IMU (the third lane shares the second), set to 7 to give every lane its own IMU. There may be insufficient memory and processing resources to run all three lanes. If this occurs EKF3 will fail to start.
+    // @Description: 1 byte bitmap of IMUs available for EKF3 to use. EKF3 always runs MAX_EKF_CORES (3) lanes, one per source set, regardless of how many IMUs are selected here. Lane number `i` uses the `min(i, N-1)`'th IMU selected by this mask, where `N` is the number of IMUs selected. In particular, this means that lanes beyond the last available IMU share it with the last lane that has one of its own. Set to 1 to use only the first IMU (all three lanes share it), set to 3 to use the first and second IMU (the third lane shares the second), set to 7 to give every lane its own IMU. There may be insufficient memory and processing resources to run all three lanes. If this occurs EKF3 will fail to start.
     // @Bitmask: 0:FirstIMU,1:SecondIMU,2:ThirdIMU,3:FourthIMU,4:FifthIMU,5:SixthIMU
     // @User: Advanced
     // @RebootRequired: True
@@ -922,7 +922,7 @@ bool NavEKF3::InitialiseFilter(void)
         // clip the mask to the IMUs that actually exist
         uint8_t mask = (1U<<ins.get_accel_count())-1;
         _imuMask.set_and_default(_imuMask.get() & mask);
-
+        
         // initialise the setup variables
         for (uint8_t i=0; i<MAX_EKF_CORES; i++) {
             coreSetupRequired[i] = false;
@@ -946,12 +946,6 @@ bool NavEKF3::InitialiseFilter(void)
             return false;
         }
 
-        // Always run MAX_EKF_CORES lanes, one per source set, regardless of how
-        // many physical IMUs are available. This keeps lane-switch robustness
-        // (across source sets / sensor configs) on boards with fewer IMUs than
-        // lanes: lane i uses available IMU min(i, num_available_imus-1), so any
-        // lanes beyond the last available IMU share it with the last lane that
-        // has one of its own.
         num_cores = MAX_EKF_CORES;
         for (uint8_t i=0; i<num_cores; i++) {
             coreSetupRequired[i] = true;
