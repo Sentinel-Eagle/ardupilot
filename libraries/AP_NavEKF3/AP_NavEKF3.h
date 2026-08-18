@@ -564,7 +564,7 @@ private:
     
     bool runCoreSelection;                          // true when the primary core has stabilised and the core selection logic can be started
     bool coreSetupRequired[MAX_EKF_CORES];          // true when this core index needs to be setup
-    uint8_t coreImuIndex[MAX_EKF_CORES];            // IMU index used by this core, it may be shared with another core when there are fewer IMUs than lanes
+    uint8_t coreImuIndex[MAX_EKF_CORES];            // IMU index used by this core, the last one may be shared with other cores when there are fewer IMUs than lanes
     std::optional<uint32_t> coreYawVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the yaw variance gate
     std::optional<uint32_t> corePosVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the pos variance gate
     
