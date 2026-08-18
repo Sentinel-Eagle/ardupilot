@@ -1025,27 +1025,27 @@ void NavEKF3::report_lane_sensor_assignments(void) const
 
     for (uint8_t i=0; i<num_cores; i++) {
         char msg[70];
-        size_t n = 0;
-        n += MAX(dal.snprintf(msg+n, sizeof(msg)-n, "IMU%u", (unsigned)coreImuIndex[i]), 0);
-        n = MIN(n, sizeof(msg)-1);
+        size_t msg_len = 0;
+        msg_len += MAX(dal.snprintf(msg+msg_len, sizeof(msg)-msg_len, "IMU%u", (unsigned)coreImuIndex[i]), 0);
+        msg_len = MIN(msg_len, sizeof(msg)-1);
         // lanes only get a dedicated sensor here when EK3_AFFINITY assigns
         // them one and it actually exists; otherwise they share the primary
         // sensor, which is not lane-specific and not worth reporting per lane
         if ((_affinity & affinity_gps) && i < gps.num_sensors()) {
-            n += MAX(dal.snprintf(msg+n, sizeof(msg)-n, " GPS%u", (unsigned)i), 0);
-            n = MIN(n, sizeof(msg)-1);
+            msg_len += MAX(dal.snprintf(msg+msg_len, sizeof(msg)-msg_len, " GPS%u", (unsigned)i), 0);
+            msg_len = MIN(msg_len, sizeof(msg)-1);
         }
         if ((_affinity & affinity_mag) && i < compass.get_count()) {
-            n += MAX(dal.snprintf(msg+n, sizeof(msg)-n, " compass%u", (unsigned)i), 0);
-            n = MIN(n, sizeof(msg)-1);
+            msg_len += MAX(dal.snprintf(msg+msg_len, sizeof(msg)-msg_len, " compass%u", (unsigned)i), 0);
+            msg_len = MIN(msg_len, sizeof(msg)-1);
         }
         if ((_affinity & affinity_baro) && i < baro.num_instances()) {
-            n += MAX(dal.snprintf(msg+n, sizeof(msg)-n, " baro%u", (unsigned)i), 0);
-            n = MIN(n, sizeof(msg)-1);
+            msg_len += MAX(dal.snprintf(msg+msg_len, sizeof(msg)-msg_len, " baro%u", (unsigned)i), 0);
+            msg_len = MIN(msg_len, sizeof(msg)-1);
         }
         if (arsp != nullptr && (_affinity & affinity_arsp) && i < arsp->get_num_sensors()) {
-            n += MAX(dal.snprintf(msg+n, sizeof(msg)-n, " airspeed%u", (unsigned)i), 0);
-            n = MIN(n, sizeof(msg)-1);
+            msg_len += MAX(dal.snprintf(msg+msg_len, sizeof(msg)-msg_len, " airspeed%u", (unsigned)i), 0);
+            msg_len = MIN(msg_len, sizeof(msg)-1);
         }
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u: %s", (unsigned)i, msg);
     }
