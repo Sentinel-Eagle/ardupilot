@@ -2074,6 +2074,37 @@ void NavEKF3::send_status_report(GCS_MAVLINK &link) const
     }
 }
 
+void NavEKF3::send_eagle_lanes_report(GCS_MAVLINK &link) const
+{
+    if (!core) {
+        return;
+    }
+
+    mavlink_eagle_lanes_t packet{};
+    packet.active_lane = primary;
+    packet.lane_count = num_cores;
+
+    for (uint8_t i = 0; i < num_cores && i < MAX_EKF_CORES; i++) {
+        Location loc;
+        core[i].getLLH(loc);
+        packet.lat[i] = loc.lat;
+        packet.lng[i] = loc.lng;
+        packet.alt[i] = loc.alt * 0.01f; // cm -> m
+
+        Vector3f eulers;
+        core[i].getEulerAngles(eulers);
+        packet.roll[i] = eulers.x;
+        packet.pitch[i] = eulers.y;
+        packet.yaw[i] = eulers.z;
+
+        packet.pos_variance_ne[i] = core[i].get_pos_variance_NE();
+        packet.is_healthy[i] = core_is_primary_eligible(core[i]);
+        packet.posxy_source[i] = uint8_t(core[i].get_posxy_source());
+    }
+
+    mavlink_msg_eagle_lanes_send_struct(link.get_chan(), &packet);
+}
+
 // provides the height limit to be observed by the control loops
 // returns false if no height limiting is required
 // this is needed to ensure the vehicle does not fly too high when using optical flow navigation
