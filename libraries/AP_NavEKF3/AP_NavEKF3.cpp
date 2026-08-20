@@ -2089,7 +2089,7 @@ void NavEKF3::send_eagle_lane_states_report(GCS_MAVLINK &link) const
         core[i].getLLH(loc);
         packet.lat[i] = loc.lat;
         packet.lng[i] = loc.lng;
-        packet.alt[i] = loc.alt * 0.01f; // cm -> m
+        packet.alt_m[i] = loc.alt * 0.01f; // cm -> m
 
         Vector3f eulers;
         core[i].getEulerAngles(eulers);
