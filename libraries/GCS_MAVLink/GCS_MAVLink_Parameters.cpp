@@ -275,7 +275,7 @@ static const ap_message STREAM_POSITION_msgs[] = {
     MSG_LOCAL_POSITION,
 #endif  // AP_AHRS_ENABLED
 #if HAL_NAVEKF3_AVAILABLE
-    MSG_EAGLE_LANES,
+    MSG_EAGLE_LANE_STATES,
 #endif  // HAL_NAVEKF3_AVAILABLE
 };
 
