@@ -21,6 +21,19 @@
 
 const char* AP_Mount_XFRobot::send_text_prefix = "XFRobot:";
 
+enum CameraSource : uint8_t {
+    DEFAULT = 0,
+    RGB = 1,
+    THERMAL = 2,
+};
+
+enum LensSource : uint8_t {
+    RGB_NOTHING = 0,
+    THERMAL_NOTHING = 1,
+    RGB_THERMAL = 2,
+    THERMAL_RGB = 3,
+};
+
 ////////////////////////////////////////////////////////
 // packet structure from autopilot to gimbal
 // byte 0: header1 (0xA8)
@@ -145,6 +158,8 @@ bool AP_Mount_XFRobot::healthy() const
 // take a picture.  returns true on success
 bool AP_Mount_XFRobot::take_picture()
 {
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s take picture", send_text_prefix);
+
     // send command to take picture
     return send_simple_command(FunctionOrder::SHUTTER, 0x01);
 }
@@ -157,6 +172,13 @@ bool AP_Mount_XFRobot::set_lens(uint8_t lens)
         CameraType::MAIN_ZOOM_SUB_THERMAL,
         CameraType::MAIN_THERMAL_SUB_ZOOM,
         CameraType::MAIN_PIP_ZOOM_SUB_THERMAL,
+        CameraType::MAIN_PIP_THERMAL_SUB_ZOOM,
+    };
+    static const char* const source_name_table[] {
+        "RGB",
+        "thermal",
+        "RGB/thermal",
+        "thermal/RGB",
     };
 
     // sanity check lens values
@@ -164,9 +186,41 @@ bool AP_Mount_XFRobot::set_lens(uint8_t lens)
         return false;
     }
 
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s camera source %s", send_text_prefix, source_name_table[lens]);
+
     // map lens to camera type and send command
     return send_simple_command(FunctionOrder::PIC_IN_PIC, (uint8_t)cam_type_table[lens]);
 }
+
+#if HAL_MOUNT_SET_CAMERA_SOURCE_ENABLED
+bool AP_Mount_XFRobot::set_camera_source(uint8_t primary_source, uint8_t secondary_source) {
+    switch (primary_source) {
+    case CameraSource::DEFAULT:
+    case CameraSource::RGB: {
+        switch (secondary_source) {
+        case CameraSource::DEFAULT:
+            return set_lens(LensSource::RGB_NOTHING);
+        case CameraSource::THERMAL:
+            return set_lens(LensSource::RGB_THERMAL);
+        default:
+            return false;
+        }
+    }
+    case CameraSource::THERMAL: {
+        switch (secondary_source) {
+        case CameraSource::DEFAULT:
+            return set_lens(LensSource::THERMAL_NOTHING);
+        case CameraSource::RGB:
+            return set_lens(LensSource::THERMAL_RGB);
+        default:
+            return false;
+        }
+    }
+    default:
+        return false;
+    }
+}
+#endif // HAL_MOUNT_SET_CAMERA_SOURCE_ENABLED
 
 // start or stop video recording.  returns true on success
 // set start_recording = true to start record, false to stop recording
@@ -185,6 +239,11 @@ bool AP_Mount_XFRobot::record_video(bool start_recording)
         return true;
     }
     return false;
+}
+
+void AP_Mount_XFRobot::yaw_lock_changed(bool yaw_lock)
+{
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s yaw lock %s", send_text_prefix, yaw_lock ? "HIGH" : "LOW");
 }
 
 // set zoom specified as a rate or percentage
