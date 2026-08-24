@@ -164,7 +164,7 @@ void AP_Mount_XFRobot::update()
 bool AP_Mount_XFRobot::healthy() const
 {
     // healthy if initialised and attitude from gimbal has been received within the last second
-    return _initialised && (AP_HAL::millis() - attitude_latest.update_ms) < HEALTH_TIMEOUT_MS;
+    return _initialised && (attitude_latest.update_ms != 0) && (AP_HAL::millis() - attitude_latest.update_ms) < HEALTH_TIMEOUT_MS;
 }
 
 // take a picture.  returns true on success
@@ -302,7 +302,10 @@ SetFocusResult AP_Mount_XFRobot::set_focus(FocusType focus_type, float focus_val
 // get attitude as a quaternion.  returns true on success
 bool AP_Mount_XFRobot::get_attitude_quaternion(Quaternion& att_quat)
 {
-    // gimbal does not provide attitude so simply return targets
+    if (!healthy()) {
+        return false;
+    }
+
     att_quat.from_euler(radians(attitude_latest.roll_ef_deg), radians(attitude_latest.pitch_ef_deg), radians(attitude_latest.yaw_bf_deg));
     return true;
 }

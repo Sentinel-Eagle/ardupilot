@@ -336,24 +336,32 @@ void AP_Mount_Backend::set_yaw_lock(bool yaw_lock)
 {
     const bool yaw_lock_has_changed = _yaw_lock != yaw_lock;
 
-    // if yaw not locked already, capture mount's earth frame heading for later possible use
-    if (!_yaw_lock) {
+    // when enabling yaw lock, capture the mount's earth-frame heading
+    if (yaw_lock_has_changed && yaw_lock) {
         float roll_in, pitch_in, yaw_in;
         get_rc_input(roll_in, pitch_in, yaw_in);
-         //adjust current ef mount heading by current RC yaw angle input and store for later use
+
+        const float yaw_input_rad = radians(wrap_180((yaw_in + 1.0f) * 0.5f *
+                                                    (_params.yaw_angle_max - _params.yaw_angle_min) +
+                                                    _params.yaw_angle_min));
+
+        // Default to preserving the current body-frame command.  If fresh
+        // attitude feedback is available, preserve the actual mount heading
+        // instead.  This avoids reusing a stale heading when feedback is lost.
+        float yaw_ef_rad = wrap_PI(yaw_input_rad + AP::ahrs().get_yaw_rad());
         Quaternion att_quat_bf_rad;
         if (get_attitude_quaternion(att_quat_bf_rad)) {
             const float euler_yaw_bf_rad = att_quat_bf_rad.get_euler_yaw();
-            const float euler_yaw_ef_rad = wrap_PI(euler_yaw_bf_rad + AP::ahrs().get_yaw_rad());
-            _yaw_lock_heading_rad = wrap_PI(euler_yaw_ef_rad - radians(wrap_180((yaw_in + 1.0f) * 0.5f * (_params.yaw_angle_max - _params.yaw_angle_min) + _params.yaw_angle_min)));
+            yaw_ef_rad = wrap_PI(euler_yaw_bf_rad + AP::ahrs().get_yaw_rad());
         }
+        _yaw_lock_heading_rad = wrap_PI(yaw_ef_rad - yaw_input_rad);
     }
     _yaw_lock = yaw_lock;
 
     if (yaw_lock_has_changed) {
         yaw_lock_changed(yaw_lock);
     }
- }
+}
 
 
 // clear_roi_target - clears target location that mount should attempt to point towards
