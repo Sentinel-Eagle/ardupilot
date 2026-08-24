@@ -137,6 +137,8 @@ enum LensSource : uint8_t {
 // update mount position - should be called periodically
 void AP_Mount_XFRobot::update()
 {
+    AP_Mount_Backend::update();
+
     // exit immediately if not initialised
     if (!_initialised) {
         return;
