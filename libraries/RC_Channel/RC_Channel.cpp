@@ -61,7 +61,10 @@ extern const AP_HAL::HAL& hal;
 #include <AP_Vehicle/AP_Vehicle_Type.h>
 #include <AP_Parachute/AP_Parachute_config.h>
 #include <AP_Scripting/AP_Scripting.h>
-#define SWITCH_DEBOUNCE_TIME_MS  200
+static constexpr uint16_t SWITCH_DEBOUNCE_TIME_MS = 200U;
+#if AP_CAMERA_ENABLED
+static constexpr uint16_t CAMERA_TRIGGER_DEBOUNCE_TIME_MS = 50U;
+#endif
 
 const AP_Param::GroupInfo RC_Channel::var_info[] = {
     // @Param: MIN
@@ -616,7 +619,7 @@ bool RC_Channel::read_6pos_switch(int8_t& position)
         position = 5;
     }
 
-    if (!debounce_completed(position)) {
+    if (!debounce_completed(position, SWITCH_DEBOUNCE_TIME_MS)) {
         return false;
     }
 
@@ -632,7 +635,7 @@ void RC_Channel::read_mode_switch()
     }
 }
 
-bool RC_Channel::debounce_completed(int8_t position)
+bool RC_Channel::debounce_completed(int8_t position, uint16_t debounce_time_ms)
 {
     // switch change not detected
     if (switch_state.current_position == position) {
@@ -646,7 +649,7 @@ bool RC_Channel::debounce_completed(int8_t position)
         if (switch_state.debounce_position != position) {
             switch_state.debounce_position = position;
             switch_state.last_edge_time_ms = tnow_ms;
-        } else if (tnow_ms - switch_state.last_edge_time_ms >= SWITCH_DEBOUNCE_TIME_MS) {
+        } else if (tnow_ms - switch_state.last_edge_time_ms >= debounce_time_ms) {
             // position estabilished; debounce completed
             switch_state.current_position = position;
             return true;
@@ -1037,7 +1040,13 @@ bool RC_Channel::read_aux()
         }
     }
 
-    if (!debounce_completed((int8_t)new_position)) {
+    uint16_t debounce_time_ms = SWITCH_DEBOUNCE_TIME_MS;
+#if AP_CAMERA_ENABLED
+    if (_option == AUX_FUNC::CAMERA_TRIGGER) {
+        debounce_time_ms = CAMERA_TRIGGER_DEBOUNCE_TIME_MS;
+    }
+#endif
+    if (!debounce_completed((int8_t)new_position, debounce_time_ms)) {
         return false;
     }
 
