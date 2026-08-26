@@ -255,10 +255,12 @@ void AP_Mount_Backend::set_poi_lock()
     if (!roi_is_set()) {
         mnt_target.poi_start_ms = AP_HAL::millis();
         mnt_target.pointing_at_poi_at_home_alt = false;
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: tracking r=%.1f p=%.1f y=%.1f", degrees(mnt_target.angle_rad.roll), degrees(mnt_target.angle_rad.pitch), degrees(mnt_target.angle_rad.yaw));
     } else {  // there is a poi target, just turn POI tracking back on
         set_mode(MAV_MOUNT_MODE_GPS_POINT);
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: tracking");
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
+                      _roi_target.lat * 1.0e-7,
+                      _roi_target.lng * 1.0e-7,
+                      _roi_target.alt * 0.01);
         mnt_target.poi_start_ms = 0;
     }
 }
@@ -291,6 +293,10 @@ void AP_Mount_Backend::update_poi_lock_target()
     if (!mnt_target.pointing_at_poi_at_home_alt) {
         if (calculate_poi_at_home_alt(target_location)) {
             set_roi_target(target_location);
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
+                          target_location.lat * 1.0e-7,
+                          target_location.lng * 1.0e-7,
+                          target_location.alt * 0.01);
         }
         // attempt the home-alt POI only once per switch engagement; retrying would repeat warnings at the update rate
         mnt_target.pointing_at_poi_at_home_alt = true;
@@ -321,6 +327,10 @@ void AP_Mount_Backend::update_poi_lock_target()
     // if that fails, give warning
     if (get_poi(_instance, quat, vehicle_location, target_location)) {
         set_roi_target(target_location);
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
+                      target_location.lat * 1.0e-7,
+                      target_location.lng * 1.0e-7,
+                      target_location.alt * 0.01);
         mnt_target.poi_start_ms = 0;
     } else if (AP_HAL::millis() - mnt_target.poi_start_ms > 5000) {
     //stop terrain-based POI calculation
