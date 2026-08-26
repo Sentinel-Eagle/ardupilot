@@ -3,9 +3,9 @@
 #if HAL_MOUNT_XFROBOT_ENABLED
 
 #include "AP_Mount_XFRobot.h"
+#include "AP_Mount_XFRobot_Carrier.h"
 #include <AP_HAL/AP_HAL.h>
 #include <AP_AHRS/AP_AHRS.h>
-#include <AP_GPS/AP_GPS.h>
 #include <GCS_MAVLink/GCS.h>
 #include <AP_HAL/utility/sparse-endian.h>
 
@@ -260,6 +260,16 @@ void AP_Mount_XFRobot::yaw_lock_changed(bool yaw_lock)
     GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s yaw lock %s", send_text_prefix, yaw_lock ? "HIGH" : "LOW");
 }
 
+float AP_Mount_XFRobot::get_vehicle_yaw_rad() const
+{
+    return AP_Mount_XFRobot_Carrier::get_yaw_rad(AP_HAL::millis());
+}
+
+bool AP_Mount_XFRobot::get_vehicle_location(Location& location) const
+{
+    return AP_Mount_XFRobot_Carrier::get_location(AP_HAL::millis(), location);
+}
+
 // set zoom specified as a rate or percentage
 bool AP_Mount_XFRobot::set_zoom(ZoomType zoom_type, float zoom_value)
 {
@@ -454,42 +464,41 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget& angle_target_r
     // byte 4: protocol version (0x02)
     set_attitude_packet.content.main.version = PROTOCOL_VERSION;
 
+    const AP_Mount_XFRobot_Carrier::State carrier = AP_Mount_XFRobot_Carrier::get_state(AP_HAL::millis());
+
     // byte 5~6: roll control value (int16, -18000 ~ +18000)
     // byte 7~8: pitch control value (int16, -18000 ~ +18000)
     // byte 9~10: yaw control value (int16, -18000 ~ +18000)
     set_attitude_packet.content.main.roll_control = htole16(constrain_int16(degrees(angle_target_rad.roll) * 100, -18000, 18000));
     set_attitude_packet.content.main.pitch_control = htole16(constrain_int16(degrees(angle_target_rad.pitch) * 100, -9000, 9000));
-    set_attitude_packet.content.main.yaw_control = htole16(constrain_int16(degrees(angle_target_rad.get_bf_yaw()) * 100, -18000, 18000));
+    const float yaw_control_rad = angle_target_rad.get_bf_yaw(carrier.yaw_rad);
+    set_attitude_packet.content.main.yaw_control = htole16(constrain_int16(degrees(yaw_control_rad) * 100, -18000, 18000));
 
     // byte 11: status, Bit0:INS valid, Bit2:control values valid
-    const uint8_t status_ins_bit = AP::ahrs().have_inertial_nav() ? (1 << 0) : 0;
+    const uint8_t status_ins_bit = carrier.ins_valid ? (1 << 0) : 0;
     set_attitude_packet.content.main.status = status_ins_bit | (1 << 2);
 
     // byte 12~13: absolute roll angle of vehicle (int16, -18000 ~ +18000)
     // byte 14~15: absolute pitch angle of vehicle (int16, -9000 ~ +9000)
     // byte 16~17: absolute yaw angle of vehicle (uint16, 0 ~ 36000)
-    set_attitude_packet.content.main.roll_abs = htole16(constrain_int16(AP::ahrs().get_roll_deg() * 100, -18000, 18000));
-    set_attitude_packet.content.main.pitch_abs = htole16(constrain_int16(AP::ahrs().get_pitch_deg() * 100, -9000, 9000));
-    set_attitude_packet.content.main.yaw_abs = htole16(constrain_int16(degrees(wrap_PI(AP::ahrs().get_yaw_rad())) * 100, -18000, 18000));
+    set_attitude_packet.content.main.roll_abs = htole16(constrain_int16(carrier.roll_deg * 100, -18000, 18000));
+    set_attitude_packet.content.main.pitch_abs = htole16(constrain_int16(carrier.pitch_deg * 100, -9000, 9000));
+    set_attitude_packet.content.main.yaw_abs = htole16(constrain_int32(degrees(wrap_2PI(carrier.yaw_rad)) * 100, 0, 35999));
 
     // byte 18~19: North acceleration of vehicle (int16, cm/s/s)
     // byte 20~21: East acceleration of vehicle (int16, cm/s/s)
     // byte 22~23: Upward acceleration of vehicle (int16, cm/s/s)
-    const Vector3f &accel_ef = AP::ahrs().get_accel_ef();
-    set_attitude_packet.content.main.accel_north = htole16(constrain_int16(accel_ef.x * 100, -INT16_MAX, INT16_MAX));
-    set_attitude_packet.content.main.accel_east = htole16(constrain_int16(accel_ef.y * 100, -INT16_MAX, INT16_MAX));
-    set_attitude_packet.content.main.accel_up = htole16(constrain_int16(-(accel_ef.z + GRAVITY_MSS) * 100, -INT16_MAX, INT16_MAX));
+    set_attitude_packet.content.main.accel_north = htole16(constrain_int16(carrier.accel_neu_mss.x * 100, -INT16_MAX, INT16_MAX));
+    set_attitude_packet.content.main.accel_east = htole16(constrain_int16(carrier.accel_neu_mss.y * 100, -INT16_MAX, INT16_MAX));
+    set_attitude_packet.content.main.accel_up = htole16(constrain_int16(carrier.accel_neu_mss.z * 100, -INT16_MAX, INT16_MAX));
 
     // byte 24~25: North speed of vehicle (int16, decimeter/s)
     // byte 26~27: East speed of vehicle (int16, decimeter/s)
     // byte 28~29: Upward speed of vehicle (int16, decimeter/s)
     // ToDo: check scale (cm/s or decimeter/s)
-    Vector3f velocity_ef;
-    if (AP::ahrs().have_inertial_nav() && AP::ahrs().get_velocity_NED(velocity_ef)) {
-        set_attitude_packet.content.main.vel_north = htole16(constrain_int16(velocity_ef.x * 10, -INT16_MAX, INT16_MAX));
-        set_attitude_packet.content.main.vel_east = htole16(constrain_int16(velocity_ef.y * 10, -INT16_MAX, INT16_MAX));
-        set_attitude_packet.content.main.vel_up = htole16(constrain_int16(-velocity_ef.z * 10, -INT16_MAX, INT16_MAX));
-    }
+    set_attitude_packet.content.main.vel_north = htole16(constrain_int16(carrier.velocity_neu_ms.x * 10, -INT16_MAX, INT16_MAX));
+    set_attitude_packet.content.main.vel_east = htole16(constrain_int16(carrier.velocity_neu_ms.y * 10, -INT16_MAX, INT16_MAX));
+    set_attitude_packet.content.main.vel_up = htole16(constrain_int16(carrier.velocity_neu_ms.z * 10, -INT16_MAX, INT16_MAX));
 
     // byte 30: request code of sub frame, header of requested sub data frame from GCU (aka camera)
     set_attitude_packet.content.main.request_code = 0x01;
@@ -503,39 +512,21 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget& angle_target_r
     // byte 38~41: longitude of vehicle (int32, 1E7)
     // byte 42~45: latitude of vehicle (int32, 1E7)
     // byte 46~49: altitude of vehicle (int32, mm)
-    Location veh_loc;
-    if (AP::ahrs().get_location(veh_loc)) {
-        // longitude
-        set_attitude_packet.content.main.longitude = htole32(veh_loc.lng);
-
-        // latitude
-        set_attitude_packet.content.main.latitude = htole32(veh_loc.lat);
-
-        // get absolute altitude and convert from cm to mm
-        int32_t alt_amsl_cm;
-        if (veh_loc.get_alt_cm(Location::AltFrame::ABSOLUTE, alt_amsl_cm)) {
-            const int32_t alt_amsl_mm = alt_amsl_cm * 10;
-            set_attitude_packet.content.main.alt_amsl = htole32(alt_amsl_mm);
-        }
-    }
+    set_attitude_packet.content.main.longitude = htole32(carrier.longitude);
+    set_attitude_packet.content.main.latitude = htole32(carrier.latitude);
+    set_attitude_packet.content.main.alt_amsl = htole32(carrier.altitude_amsl_mm);
 
     // byte 50: number of satellites
-    set_attitude_packet.content.main.gps_num_sats = AP::gps().num_sats();
+    set_attitude_packet.content.main.gps_num_sats = carrier.gps_num_sats;
 
     // byte 51~54: GNSS milliseconds (uint32)
-    const uint32_t gps_time_week_ms = AP::gps().time_week_ms();
-    set_attitude_packet.content.main.gps_week_ms = htole32(gps_time_week_ms);
+    set_attitude_packet.content.main.gps_week_ms = htole32(carrier.gps_week_ms);
 
     // byte 55~56: GNSS week number (uint16)
-    const uint16_t gps_time_week = AP::gps().time_week();
-    set_attitude_packet.content.main.gps_week = htole16(gps_time_week);
+    set_attitude_packet.content.main.gps_week = htole16(carrier.gps_week);
 
     // byte 57~60: relative altitude (int32, mm, can be zero if unavailable)
-    int32_t rel_alt_cm;
-    if (veh_loc.initialised() && veh_loc.get_alt_cm(Location::AltFrame::ABOVE_HOME, rel_alt_cm)) {        
-        const int32_t rel_alt_mm = rel_alt_cm * 10;
-        set_attitude_packet.content.main.alt_rel = htole32(rel_alt_mm);
-    }
+    set_attitude_packet.content.main.alt_rel = htole32(carrier.relative_altitude_mm);
 
     // byte 61~68: reserved/unused
 
