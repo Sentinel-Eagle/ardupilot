@@ -260,9 +260,11 @@ protected:
 
         // return body-frame yaw angle from a mount target (in radians)
         float get_bf_yaw() const;
+        float get_bf_yaw(float vehicle_yaw_rad) const;
 
         // return earth-frame yaw angle from a mount target (in radians)
         float get_ef_yaw() const;
+        float get_ef_yaw(float vehicle_yaw_rad) const;
 
         // set roll, pitch, yaw and yaw_is_ef from Vector3f
         void set(const Vector3f& rpy, bool yaw_is_ef_in);
@@ -385,6 +387,9 @@ protected:
 
     // sent warning to GCS
     void send_warning_to_GCS(const char* warning_str);
+
+    // vehicle yaw used for earth-frame mount targeting
+    virtual float get_vehicle_yaw_rad() const;
 
     AP_Mount    &_frontend; // reference to the front end which holds parameters
     AP_Mount_Params &_params; // parameters for this backend

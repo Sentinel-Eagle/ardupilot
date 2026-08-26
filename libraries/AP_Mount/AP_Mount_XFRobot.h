@@ -63,6 +63,8 @@ protected:
 
     void yaw_lock_changed(bool yaw_lock) override;
 
+    float get_vehicle_yaw_rad() const override;
+
     // get attitude as a quaternion.  returns true on success
     bool get_attitude_quaternion(Quaternion& att_quat) override;
 
@@ -172,7 +174,7 @@ private:
         uint8_t status;         // byte 11: status, Bit0:INS valid, Bit2:control values valid
         int16_t roll_abs;       // byte 12~13: absolute roll angle of vehicle (int16, -18000 ~ +18000)
         int16_t pitch_abs;      // byte 14~15: absolute pitch angle of vehicle (int16, -9000 ~ +9000)
-        int16_t yaw_abs;        // byte 16~17: absolute yaw angle of vehicle (uint16, 0 ~ 36000)    
+        uint16_t yaw_abs;       // byte 16~17: absolute yaw angle of vehicle (uint16, 0 ~ 36000)
         int16_t accel_north;    // byte 18~19: North acceleration of vehicle (int16, cm/s/s)
         int16_t accel_east;     // byte 20~21: East acceleration of vehicle (int16, cm/s/s)
         int16_t accel_up;       // byte 22~23: Upward acceleration of vehicle (int16, cm/s/s)
