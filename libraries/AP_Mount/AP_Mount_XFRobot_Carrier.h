@@ -4,6 +4,7 @@
 
 #if HAL_MOUNT_XFROBOT_ENABLED
 
+#include <AP_Common/Location.h>
 #include <AP_Math/AP_Math.h>
 
 class AP_Mount_XFRobot_Carrier {
@@ -26,6 +27,7 @@ public:
 
     static State get_state(uint32_t now_ms);
     static float get_yaw_rad(uint32_t now_ms);
+    static bool get_location(uint32_t now_ms, Location& location);
 
 private:
     static State get_live_state();

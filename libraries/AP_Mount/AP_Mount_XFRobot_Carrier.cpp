@@ -24,6 +24,20 @@ float AP_Mount_XFRobot_Carrier::get_yaw_rad(uint32_t now_ms)
 #endif
 }
 
+bool AP_Mount_XFRobot_Carrier::get_location(uint32_t now_ms, Location& location)
+{
+#if AP_MOUNT_XFROBOT_BENCH_SIM_ENABLED
+    const State state = get_bench_state(now_ms);
+    location = Location(state.latitude,
+                        state.longitude,
+                        state.altitude_amsl_mm / 10,
+                        Location::AltFrame::ABSOLUTE);
+    return true;
+#else
+    return AP::ahrs().get_location(location);
+#endif
+}
+
 AP_Mount_XFRobot_Carrier::State AP_Mount_XFRobot_Carrier::get_live_state()
 {
     const Vector3f &accel_ef = AP::ahrs().get_accel_ef();

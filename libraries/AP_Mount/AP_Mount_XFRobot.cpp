@@ -265,6 +265,11 @@ float AP_Mount_XFRobot::get_vehicle_yaw_rad() const
     return AP_Mount_XFRobot_Carrier::get_yaw_rad(AP_HAL::millis());
 }
 
+bool AP_Mount_XFRobot::get_vehicle_location(Location& location) const
+{
+    return AP_Mount_XFRobot_Carrier::get_location(AP_HAL::millis(), location);
+}
+
 // set zoom specified as a rate or percentage
 bool AP_Mount_XFRobot::set_zoom(ZoomType zoom_type, float zoom_value)
 {

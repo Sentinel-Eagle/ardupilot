@@ -65,6 +65,8 @@ protected:
 
     float get_vehicle_yaw_rad() const override;
 
+    bool get_vehicle_location(Location& location) const override;
+
     // get attitude as a quaternion.  returns true on success
     bool get_attitude_quaternion(Quaternion& att_quat) override;
 

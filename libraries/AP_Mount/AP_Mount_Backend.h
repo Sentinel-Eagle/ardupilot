@@ -391,6 +391,9 @@ protected:
     // vehicle yaw used for earth-frame mount targeting
     virtual float get_vehicle_yaw_rad() const;
 
+    // vehicle location used for location and POI mount targeting
+    virtual bool get_vehicle_location(Location& location) const;
+
     AP_Mount    &_frontend; // reference to the front end which holds parameters
     AP_Mount_Params &_params; // parameters for this backend
     uint8_t     _instance;  // this instance's number

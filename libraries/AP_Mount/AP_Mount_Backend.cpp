@@ -61,7 +61,7 @@ void AP_Mount_Backend::update()
     case MAV_MOUNT_MODE_GPS_POINT:
     case MAV_MOUNT_MODE_SYSID_TARGET:
     case MAV_MOUNT_MODE_HOME_LOCATION:
-         if (!AP::ahrs().get_location(current_loc)) {
+         if (!get_vehicle_location(current_loc)) {
              send_warning_to_GCS("not targeting, no location");
          }
     }
@@ -727,9 +727,8 @@ void AP_Mount_Backend::calculate_poi()
         }
 
         // get the current location of vehicle
-        const AP_AHRS &ahrs = AP::ahrs();
         Location curr_loc;
-        if (!ahrs.get_location(curr_loc)) {
+        if (!get_vehicle_location(curr_loc)) {
             continue;
         }
 
@@ -758,7 +757,7 @@ void AP_Mount_Backend::calculate_poi()
         // iteratively move test_loc forward until its alt-above-sea-level is below terrain-alt-above-sea-level
         const float dist_increment_m = MAX(terrain->get_grid_spacing(), 10);
         const float mount_pitch_deg = degrees(quat.get_euler_pitch());
-        const float mount_yaw_ef_deg = wrap_180(degrees(quat.get_euler_yaw()) + ahrs.get_yaw_deg());
+        const float mount_yaw_ef_deg = wrap_180(degrees(quat.get_euler_yaw() + get_vehicle_yaw_rad()));
         float total_dist_m = 0;
         bool get_terrain_alt_success = true;
         float prev_terrain_amsl_m = terrain_amsl_m;
@@ -813,7 +812,7 @@ bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location)
 
     // current location
     Location cur_loc;
-    if (!ahrs.get_location(cur_loc)) {
+    if (!get_vehicle_location(cur_loc)) {
         return false;
     }
 
@@ -841,7 +840,7 @@ bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location)
     float m_yaw_body_rad;
     quat.to_euler(m_roll_rad, m_pitch_rad, m_yaw_body_rad);
 
-    const float body_yaw_earth_rad = ahrs.get_yaw_rad();
+    const float body_yaw_earth_rad = get_vehicle_yaw_rad();
     const float m_yaw_earth_rad = wrap_PI(m_yaw_body_rad + body_yaw_earth_rad);
 
     // LOS in earth NED directly from yaw_earth + pitch (avoids quaternion frame ambiguity)
@@ -980,7 +979,7 @@ bool AP_Mount_Backend::get_angle_target_to_location(const Location &loc, MountAn
 {
     // exit immediately if vehicle's location is unavailable
     Location current_loc;
-    if (!AP::ahrs().get_location(current_loc)) {
+    if (!get_vehicle_location(current_loc)) {
         return false;
     }
 
@@ -1060,6 +1059,11 @@ float AP_Mount_Backend::MountAngleTarget::get_ef_yaw(float vehicle_yaw_rad) cons
 float AP_Mount_Backend::get_vehicle_yaw_rad() const
 {
     return AP::ahrs().get_yaw_rad();
+}
+
+bool AP_Mount_Backend::get_vehicle_location(Location& location) const
+{
+    return AP::ahrs().get_location(location);
 }
 
 // sets roll, pitch, yaw and yaw_is_ef
