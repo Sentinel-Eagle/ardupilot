@@ -930,6 +930,13 @@ void AP_Mount_Backend::set_rctargeting_on_rcinput_change()
     const int16_t pitch_in = (pitch_ch == nullptr) ? 0 : pitch_ch->get_radio_in();
     const int16_t yaw_in = (yaw_ch == nullptr) ? 0 : yaw_ch->get_radio_in();
 
+#if AP_MOUNT_POI_LOCK_ENABLED
+    const bool poi_lock_active = (mnt_target.poi_start_ms != 0) ||
+                                 (roi_is_set() && get_mode() == MAV_MOUNT_MODE_GPS_POINT);
+#else
+    constexpr bool poi_lock_active = false;
+#endif
+
     if (!last_rc_input.initialised) {
             // The first time through, initial RC inputs should be set, but not used
             last_rc_input.initialised = true;
@@ -946,10 +953,15 @@ void AP_Mount_Backend::set_rctargeting_on_rcinput_change()
 
         // check if RC input has changed by more than the dead zone
         if ((abs(last_rc_input.roll_in - roll_in) > roll_dz) ||
-            (abs(last_rc_input.pitch_in - pitch_in) > pitch_dz) ||
-            (abs(last_rc_input.yaw_in - yaw_in) > yaw_dz)) {
+            (!poi_lock_active && ((abs(last_rc_input.pitch_in - pitch_in) > pitch_dz) ||
+                                  (abs(last_rc_input.yaw_in - yaw_in) > yaw_dz)))) {
             set_mode(MAV_MOUNT_MODE_RC_TARGETING);
         }
+    }
+
+    if (poi_lock_active) {
+        last_rc_input.pitch_in = pitch_in;
+        last_rc_input.yaw_in = yaw_in;
     }
 
     // if NOW in RC_TARGETING or RETRACT mode then store last RC input (mode might have changed)
@@ -1239,6 +1251,11 @@ void AP_Mount_Backend::_update_mnt_target()
 
     case MAV_MOUNT_MODE_RC_TARGETING:
         // RC radio manual angle control, but with stabilization from the AHRS
+#if AP_MOUNT_POI_LOCK_ENABLED
+        if (mnt_target.poi_start_ms != 0) {
+            return;
+        }
+#endif
         update_mnt_target_from_rc_target();
         return;
 
