@@ -61,7 +61,7 @@ void AP_Mount_Backend::update()
     case MAV_MOUNT_MODE_GPS_POINT:
     case MAV_MOUNT_MODE_SYSID_TARGET:
     case MAV_MOUNT_MODE_HOME_LOCATION:
-         if (!AP::ahrs().get_location(current_loc)) {
+         if (!get_vehicle_location(current_loc)) {
              send_warning_to_GCS("not targeting, no location");
          }
     }
@@ -117,7 +117,6 @@ void AP_Mount_Backend::update_mnt_target_from_rc_target()
 
     // frame locks
     bool FPV_option = option_set(Options::FPV_LOCK); //FPV_LOCK forces bodyframe on all axes in RC targeting mode
-    mnt_target.angle_rad.yaw_is_ef = FPV_option ? false : _yaw_lock;
     mnt_target.angle_rad.roll_is_ef = FPV_option ? false : _roll_lock;
     mnt_target.angle_rad.pitch_is_ef = FPV_option ? false : _pitch_lock;
     mnt_target.rate_rads.yaw_is_ef = FPV_option ? false : _yaw_lock;
@@ -127,6 +126,7 @@ void AP_Mount_Backend::update_mnt_target_from_rc_target()
     // if RC_RATE is zero, targets are angle
     if (_params.rc_rate_max <= 0) {
         mnt_target.target_type = MountTargetType::ANGLE;
+        mnt_target.angle_rad.yaw_is_ef = FPV_option ? false : _yaw_lock;
 
         // roll angle
         mnt_target.angle_rad.roll = radians(((roll_in + 1.0f) * 0.5f * (_params.roll_angle_max - _params.roll_angle_min) + _params.roll_angle_min));
@@ -162,7 +162,10 @@ void AP_Mount_Backend::adjust_mnt_target_if_RP_locked()
 
     // rotate ahrs roll and pitch angles to gimbal yaw
     if (has_pan_control()) {
-        const float yaw_bf_rad = constrain_float(mnt_target.angle_rad.get_bf_yaw(), radians(_params.yaw_angle_min), radians(_params.yaw_angle_max));
+        const float yaw_bf_rad = constrain_float(
+            mnt_target.angle_rad.get_bf_yaw(get_vehicle_yaw_rad()),
+            radians(_params.yaw_angle_min),
+            radians(_params.yaw_angle_max));
         ahrs_angle_rad.rotate(yaw_bf_rad);
     }
     
@@ -252,10 +255,12 @@ void AP_Mount_Backend::set_poi_lock()
     if (!roi_is_set()) {
         mnt_target.poi_start_ms = AP_HAL::millis();
         mnt_target.pointing_at_poi_at_home_alt = false;
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: tracking r=%.1f p=%.1f y=%.1f", degrees(mnt_target.angle_rad.roll), degrees(mnt_target.angle_rad.pitch), degrees(mnt_target.angle_rad.yaw));
     } else {  // there is a poi target, just turn POI tracking back on
         set_mode(MAV_MOUNT_MODE_GPS_POINT);
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: tracking");
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
+                      _roi_target.lat * 1.0e-7,
+                      _roi_target.lng * 1.0e-7,
+                      _roi_target.alt * 0.01);
         mnt_target.poi_start_ms = 0;
     }
 }
@@ -288,6 +293,10 @@ void AP_Mount_Backend::update_poi_lock_target()
     if (!mnt_target.pointing_at_poi_at_home_alt) {
         if (calculate_poi_at_home_alt(target_location)) {
             set_roi_target(target_location);
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
+                          target_location.lat * 1.0e-7,
+                          target_location.lng * 1.0e-7,
+                          target_location.alt * 0.01);
         }
         // attempt the home-alt POI only once per switch engagement; retrying would repeat warnings at the update rate
         mnt_target.pointing_at_poi_at_home_alt = true;
@@ -318,6 +327,10 @@ void AP_Mount_Backend::update_poi_lock_target()
     // if that fails, give warning
     if (get_poi(_instance, quat, vehicle_location, target_location)) {
         set_roi_target(target_location);
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
+                      target_location.lat * 1.0e-7,
+                      target_location.lng * 1.0e-7,
+                      target_location.alt * 0.01);
         mnt_target.poi_start_ms = 0;
     } else if (AP_HAL::millis() - mnt_target.poi_start_ms > 5000) {
     //stop terrain-based POI calculation
@@ -335,25 +348,44 @@ void AP_Mount_Backend::update_poi_lock_target()
 void AP_Mount_Backend::set_yaw_lock(bool yaw_lock)
 {
     const bool yaw_lock_has_changed = _yaw_lock != yaw_lock;
+    Quaternion att_quat_bf_rad;
+    const bool have_attitude = yaw_lock_has_changed && get_attitude_quaternion(att_quat_bf_rad);
 
-    // if yaw not locked already, capture mount's earth frame heading for later possible use
-    if (!_yaw_lock) {
+    // angle-only gimbals use angle_rad as an accumulator for RC rate targets.
+    // Rebase it to the physical mount yaw before changing frames so tracking
+    // error does not become a position jump at a yaw-lock transition.
+    if (have_attitude &&
+        get_mode() == MAV_MOUNT_MODE_RC_TARGETING &&
+        _params.rc_rate_max > 0) {
+        mnt_target.angle_rad.yaw = att_quat_bf_rad.get_euler_yaw();
+        mnt_target.angle_rad.yaw_is_ef = false;
+    }
+
+    // when enabling yaw lock, capture the mount's earth-frame heading
+    if (yaw_lock_has_changed && yaw_lock) {
         float roll_in, pitch_in, yaw_in;
         get_rc_input(roll_in, pitch_in, yaw_in);
-         //adjust current ef mount heading by current RC yaw angle input and store for later use
-        Quaternion att_quat_bf_rad;
-        if (get_attitude_quaternion(att_quat_bf_rad)) {
+
+        const float yaw_input_rad = radians(wrap_180((yaw_in + 1.0f) * 0.5f *
+                                                    (_params.yaw_angle_max - _params.yaw_angle_min) +
+                                                    _params.yaw_angle_min));
+
+        // Default to preserving the current body-frame command.  If fresh
+        // attitude feedback is available, preserve the actual mount heading
+        // instead.  This avoids reusing a stale heading when feedback is lost.
+        float yaw_ef_rad = wrap_PI(yaw_input_rad + get_vehicle_yaw_rad());
+        if (have_attitude) {
             const float euler_yaw_bf_rad = att_quat_bf_rad.get_euler_yaw();
-            const float euler_yaw_ef_rad = wrap_PI(euler_yaw_bf_rad + AP::ahrs().get_yaw_rad());
-            _yaw_lock_heading_rad = wrap_PI(euler_yaw_ef_rad - radians(wrap_180((yaw_in + 1.0f) * 0.5f * (_params.yaw_angle_max - _params.yaw_angle_min) + _params.yaw_angle_min)));
+            yaw_ef_rad = wrap_PI(euler_yaw_bf_rad + get_vehicle_yaw_rad());
         }
+        _yaw_lock_heading_rad = wrap_PI(yaw_ef_rad - yaw_input_rad);
     }
     _yaw_lock = yaw_lock;
 
     if (yaw_lock_has_changed) {
         yaw_lock_changed(yaw_lock);
     }
- }
+}
 
 
 // clear_roi_target - clears target location that mount should attempt to point towards
@@ -611,8 +643,8 @@ bool AP_Mount_Backend::handle_global_position_int(uint8_t msg_sysid, const mavli
 void AP_Mount_Backend::write_log(uint64_t timestamp_us)
 {
     // return immediately if no yaw estimate
-    float ahrs_yaw = AP::ahrs().get_yaw_rad();
-    if (isnan(ahrs_yaw)) {
+    const float vehicle_yaw_rad = get_vehicle_yaw_rad();
+    if (isnan(vehicle_yaw_rad)) {
         return;
     }
 
@@ -624,7 +656,7 @@ void AP_Mount_Backend::write_log(uint64_t timestamp_us)
     float yaw_bf = nanf;
     float yaw_ef = nanf;
     if (_frontend.get_attitude_euler(_instance, roll, pitch, yaw_bf)) {
-        yaw_ef = wrap_180(yaw_bf + degrees(ahrs_yaw));
+        yaw_ef = wrap_180(yaw_bf + degrees(vehicle_yaw_rad));
     }
 
     // get mount's target (desired) angles and convert yaw to earth frame
@@ -705,9 +737,8 @@ void AP_Mount_Backend::calculate_poi()
         }
 
         // get the current location of vehicle
-        const AP_AHRS &ahrs = AP::ahrs();
         Location curr_loc;
-        if (!ahrs.get_location(curr_loc)) {
+        if (!get_vehicle_location(curr_loc)) {
             continue;
         }
 
@@ -736,7 +767,7 @@ void AP_Mount_Backend::calculate_poi()
         // iteratively move test_loc forward until its alt-above-sea-level is below terrain-alt-above-sea-level
         const float dist_increment_m = MAX(terrain->get_grid_spacing(), 10);
         const float mount_pitch_deg = degrees(quat.get_euler_pitch());
-        const float mount_yaw_ef_deg = wrap_180(degrees(quat.get_euler_yaw()) + ahrs.get_yaw_deg());
+        const float mount_yaw_ef_deg = wrap_180(degrees(quat.get_euler_yaw() + get_vehicle_yaw_rad()));
         float total_dist_m = 0;
         bool get_terrain_alt_success = true;
         float prev_terrain_amsl_m = terrain_amsl_m;
@@ -791,7 +822,7 @@ bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location)
 
     // current location
     Location cur_loc;
-    if (!ahrs.get_location(cur_loc)) {
+    if (!get_vehicle_location(cur_loc)) {
         return false;
     }
 
@@ -819,7 +850,7 @@ bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location)
     float m_yaw_body_rad;
     quat.to_euler(m_roll_rad, m_pitch_rad, m_yaw_body_rad);
 
-    const float body_yaw_earth_rad = ahrs.get_yaw_rad();
+    const float body_yaw_earth_rad = get_vehicle_yaw_rad();
     const float m_yaw_earth_rad = wrap_PI(m_yaw_body_rad + body_yaw_earth_rad);
 
     // LOS in earth NED directly from yaw_earth + pitch (avoids quaternion frame ambiguity)
@@ -899,6 +930,13 @@ void AP_Mount_Backend::set_rctargeting_on_rcinput_change()
     const int16_t pitch_in = (pitch_ch == nullptr) ? 0 : pitch_ch->get_radio_in();
     const int16_t yaw_in = (yaw_ch == nullptr) ? 0 : yaw_ch->get_radio_in();
 
+#if AP_MOUNT_POI_LOCK_ENABLED
+    const bool poi_lock_active = (mnt_target.poi_start_ms != 0) ||
+                                 (roi_is_set() && get_mode() == MAV_MOUNT_MODE_GPS_POINT);
+#else
+    constexpr bool poi_lock_active = false;
+#endif
+
     if (!last_rc_input.initialised) {
             // The first time through, initial RC inputs should be set, but not used
             last_rc_input.initialised = true;
@@ -915,10 +953,15 @@ void AP_Mount_Backend::set_rctargeting_on_rcinput_change()
 
         // check if RC input has changed by more than the dead zone
         if ((abs(last_rc_input.roll_in - roll_in) > roll_dz) ||
-            (abs(last_rc_input.pitch_in - pitch_in) > pitch_dz) ||
-            (abs(last_rc_input.yaw_in - yaw_in) > yaw_dz)) {
-                set_mode(MAV_MOUNT_MODE_RC_TARGETING);
+            (!poi_lock_active && ((abs(last_rc_input.pitch_in - pitch_in) > pitch_dz) ||
+                                  (abs(last_rc_input.yaw_in - yaw_in) > yaw_dz)))) {
+            set_mode(MAV_MOUNT_MODE_RC_TARGETING);
         }
+    }
+
+    if (poi_lock_active) {
+        last_rc_input.pitch_in = pitch_in;
+        last_rc_input.yaw_in = yaw_in;
     }
 
     // if NOW in RC_TARGETING or RETRACT mode then store last RC input (mode might have changed)
@@ -958,7 +1001,7 @@ bool AP_Mount_Backend::get_angle_target_to_location(const Location &loc, MountAn
 {
     // exit immediately if vehicle's location is unavailable
     Location current_loc;
-    if (!AP::ahrs().get_location(current_loc)) {
+    if (!get_vehicle_location(current_loc)) {
         return false;
     }
 
@@ -1004,9 +1047,14 @@ bool AP_Mount_Backend::get_angle_target_to_roi(MountAngleTarget& angle_rad) cons
 // return body-frame yaw angle from a mount target
 float AP_Mount_Backend::MountAngleTarget::get_bf_yaw() const
 {
+    return get_bf_yaw(AP::ahrs().get_yaw_rad());
+}
+
+float AP_Mount_Backend::MountAngleTarget::get_bf_yaw(float vehicle_yaw_rad) const
+{
     if (yaw_is_ef) {
         // convert to body-frame
-        return wrap_PI(yaw - AP::ahrs().get_yaw_rad());
+        return wrap_PI(yaw - vehicle_yaw_rad);
     }
 
     // target is already body-frame
@@ -1016,13 +1064,28 @@ float AP_Mount_Backend::MountAngleTarget::get_bf_yaw() const
 // return earth-frame yaw angle from a mount target
 float AP_Mount_Backend::MountAngleTarget::get_ef_yaw() const
 {
+    return get_ef_yaw(AP::ahrs().get_yaw_rad());
+}
+
+float AP_Mount_Backend::MountAngleTarget::get_ef_yaw(float vehicle_yaw_rad) const
+{
     if (yaw_is_ef) {
         // target is already earth-frame
         return yaw;
     }
 
     // convert to earth-frame
-    return wrap_PI(yaw + AP::ahrs().get_yaw_rad());
+    return wrap_PI(yaw + vehicle_yaw_rad);
+}
+
+float AP_Mount_Backend::get_vehicle_yaw_rad() const
+{
+    return AP::ahrs().get_yaw_rad();
+}
+
+bool AP_Mount_Backend::get_vehicle_location(Location& location) const
+{
+    return AP::ahrs().get_location(location);
 }
 
 // sets roll, pitch, yaw and yaw_is_ef
@@ -1046,9 +1109,9 @@ void AP_Mount_Backend::update_angle_target_from_rate(const MountRateTarget& rate
     // ensure angle yaw frames matches rate yaw frame
     if (angle_rad.yaw_is_ef != rate_rad.yaw_is_ef) {
         if (rate_rad.yaw_is_ef) {
-            angle_rad.yaw = angle_rad.get_ef_yaw();
+            angle_rad.yaw = angle_rad.get_ef_yaw(get_vehicle_yaw_rad());
         } else {
-            angle_rad.yaw = angle_rad.get_bf_yaw();
+            angle_rad.yaw = angle_rad.get_bf_yaw(get_vehicle_yaw_rad());
         }
         angle_rad.yaw_is_ef = rate_rad.yaw_is_ef;
     }
@@ -1188,6 +1251,11 @@ void AP_Mount_Backend::_update_mnt_target()
 
     case MAV_MOUNT_MODE_RC_TARGETING:
         // RC radio manual angle control, but with stabilization from the AHRS
+#if AP_MOUNT_POI_LOCK_ENABLED
+        if (mnt_target.poi_start_ms != 0) {
+            return;
+        }
+#endif
         update_mnt_target_from_rc_target();
         return;
 

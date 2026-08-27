@@ -260,9 +260,11 @@ protected:
 
         // return body-frame yaw angle from a mount target (in radians)
         float get_bf_yaw() const;
+        float get_bf_yaw(float vehicle_yaw_rad) const;
 
         // return earth-frame yaw angle from a mount target (in radians)
         float get_ef_yaw() const;
+        float get_ef_yaw(float vehicle_yaw_rad) const;
 
         // set roll, pitch, yaw and yaw_is_ef from Vector3f
         void set(const Vector3f& rpy, bool yaw_is_ef_in);
@@ -386,6 +388,12 @@ protected:
     // sent warning to GCS
     void send_warning_to_GCS(const char* warning_str);
 
+    // vehicle yaw used for earth-frame mount targeting
+    virtual float get_vehicle_yaw_rad() const;
+
+    // vehicle location used for location and POI mount targeting
+    virtual bool get_vehicle_location(Location& location) const;
+
     AP_Mount    &_frontend; // reference to the front end which holds parameters
     AP_Mount_Params &_params; // parameters for this backend
     uint8_t     _instance;  // this instance's number
@@ -427,9 +435,9 @@ private:
     bool calculate_poi_at_home_alt(Location &target_location);
 #endif
 
-    bool _yaw_lock;                 // yaw_lock used in RC_TARGETING mode. True if the gimbal's yaw target is maintained in earth-frame, if false (aka "follow") it is maintained in body-frame
+    bool _yaw_lock = false;         // yaw_lock used in RC_TARGETING mode. True if the gimbal's yaw target is maintained in earth-frame, if false (aka "follow") it is maintained in body-frame
 
-    float _yaw_lock_heading_rad;            // mount earth frame direction captured upon calling set_yaw_lock
+    float _yaw_lock_heading_rad = 0; // mount earth frame direction captured upon calling set_yaw_lock
 
 #if AP_MOUNT_POI_TO_LATLONALT_ENABLED
     struct {
