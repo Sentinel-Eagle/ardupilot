@@ -154,6 +154,9 @@ private:
     // send the pending absolute zoom target
     bool send_zoom_pct();
 
+    // scale angular motion so image motion remains constant as the FOV narrows
+    float image_rate_scale() const;
+
     // check for recording timeout
     void check_recording_timeout();
 
@@ -290,6 +293,8 @@ private:
         uint16_t pct_100;
         bool pending;
     } zoom_target;
+
+    float rgb_zoom_multiplier = 1.0f;
 
     // structure to decode incoming packets
     struct PACKED GCUSimpleReply {

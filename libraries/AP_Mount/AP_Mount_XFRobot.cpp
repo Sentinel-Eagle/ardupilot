@@ -22,6 +22,7 @@
 static constexpr uint8_t SUB_FRAME_REQUEST_CODE = 0x01;
 static constexpr uint8_t CAMERA_1_MASK = 1U << 0;
 static constexpr float ZOOM_PROTOCOL_UNITS_PER_PERCENT = 100.0f;
+static constexpr float ZOOM_FEEDBACK_UNITS_PER_MULTIPLIER = 10.0f;
 static constexpr uint16_t ABSOLUTE_ZOOM_PROTOCOL_MIN = 1U;
 static constexpr uint16_t ABSOLUTE_ZOOM_PROTOCOL_MAX = 10000U;
 
@@ -158,8 +159,18 @@ void AP_Mount_XFRobot::update()
         zoom_target.pending = false;
     }
 
-    // send target angles (which may be derived from other target types)
-    send_target_to_gimbal();
+    // XFRobot only accepts angle targets, so rate targets are integrated here
+    // after compensating pitch and yaw for the camera's current field of view.
+    if (mnt_target.target_type == MountTargetType::RATE) {
+        MountRateTarget scaled_rate_rads = mnt_target.rate_rads;
+        const float rate_scale = image_rate_scale();
+        scaled_rate_rads.pitch *= rate_scale;
+        scaled_rate_rads.yaw *= rate_scale;
+        update_angle_target_from_rate(scaled_rate_rads, mnt_target.angle_rad);
+        send_target_angles(mnt_target.angle_rad);
+    } else {
+        send_target_to_gimbal();
+    }
 }
 
 // return true if healthy
@@ -421,6 +432,8 @@ void AP_Mount_XFRobot::process_packet()
         .update_ms = AP_HAL::millis()
     };
 
+    rgb_zoom_multiplier = MAX(1.0, le16toh(msg_buff.simple_reply.main.zoom_rate_rgb) / ZOOM_FEEDBACK_UNITS_PER_MULTIPLIER);
+
     // display hardware and firmware version
     if (!got_firmware_version) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s hw:%.1f fw:%.1f", send_text_prefix, double(msg_buff.simple_reply.main.hardware_version * 0.1), double(msg_buff.simple_reply.main.firmware_version * 0.1));
@@ -621,6 +634,13 @@ bool AP_Mount_XFRobot::send_zoom_pct()
 
     _uart->write(zoom_command.bytes, sizeof(ZoomCommand));
     return true;
+}
+
+float AP_Mount_XFRobot::image_rate_scale() const
+{
+    // For optical zoom z, tan(FOVz / 2) = tan(FOV1x / 2) / z.  Scaling
+    // by their ratio keeps image-plane motion near the centre constant.
+    return 1.0f / rgb_zoom_multiplier;
 }
 
 // check for recording timeout
