@@ -428,11 +428,19 @@ private:
 #if AP_MOUNT_POI_TO_LATLONALT_ENABLED
     // calculate the Location that the gimbal is pointing at
     void calculate_poi();
+
+    // copy the latest POI calculation and its timestamp
+    bool get_poi_result(Quaternion &quat, Location &loc, Location &poi_loc, uint32_t &update_ms);
 #endif
 
 #if AP_MOUNT_POI_LOCK_ENABLED
     // calculate the Location that the gimbal is pointing at, assuming the target is at home altitude
-    bool calculate_poi_at_home_alt(Location &target_location);
+    bool calculate_poi_at_home_alt(Location &target_location, bool report_failure = true);
+
+    // update a locked POI using live pitch and yaw rate input
+    bool update_poi_adjustment();
+    void reset_poi_adjustment();
+    void send_poi_location(const Location &target_location) const;
 #endif
 
     bool _yaw_lock = false;         // yaw_lock used in RC_TARGETING mode. True if the gimbal's yaw target is maintained in earth-frame, if false (aka "follow") it is maintained in body-frame
@@ -454,6 +462,15 @@ private:
 
 #if AP_MOUNT_POI_LOCK_ENABLED
     void update_poi_lock_target();
+
+    struct {
+        bool active;
+        uint32_t last_input_ms;
+        uint32_t last_projection_ms;
+#if AP_MOUNT_POI_TO_LATLONALT_ENABLED
+        uint32_t last_result_ms;
+#endif
+    } poi_adjustment {};
 
     // mount mode saved here entering poi lock for 
     // switching poi lock back to previous mode with aux function middle position

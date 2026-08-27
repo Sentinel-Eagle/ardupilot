@@ -15,6 +15,8 @@ extern const AP_HAL::HAL& hal;
 #define AP_MOUNT_POI_REQUEST_TIMEOUT_MS 30000   // POI calculations continue to be updated for this many seconds after last request
 #define AP_MOUNT_POI_RESULT_TIMEOUT_MS  3000    // POI calculations valid for 3 seconds
 #define AP_MOUNT_POI_DIST_M_MAX         10000   // POI calculations limit of 10,000m (10km)
+#define AP_MOUNT_POI_ADJUSTMENT_UPDATE_MS 100   // update the adjusted geographic target at 10Hz
+#define AP_MOUNT_POI_ADJUSTMENT_IDLE_MS   100   // commit adjusted POI after controls are idle for this long
 
 // Default init function for every mount
 void AP_Mount_Backend::init()
@@ -96,6 +98,11 @@ bool AP_Mount_Backend::set_mode(MAV_MOUNT_MODE mode)
     if (!valid_mode(mode)) {
         return false;
     }
+#if AP_MOUNT_POI_LOCK_ENABLED
+    if (mode != MAV_MOUNT_MODE_GPS_POINT) {
+        reset_poi_adjustment();
+    }
+#endif
     _mode = mode;
     return true;
 }
@@ -235,6 +242,10 @@ void AP_Mount_Backend::set_rate_target(float roll_degs, float pitch_degs, float 
 // set_roi_target - sets target location that mount should attempt to point towards
 void AP_Mount_Backend::set_roi_target(const Location &target_loc)
 {
+#if AP_MOUNT_POI_LOCK_ENABLED
+    reset_poi_adjustment();
+#endif
+
     // set the target gps location
     _roi_target = target_loc;
 
@@ -251,16 +262,14 @@ void AP_Mount_Backend::set_roi_target(const Location &target_loc)
 // set poi_lock - switch to GPS Targeting mode using current gimbal view's GPS point or save poi location as target
 void AP_Mount_Backend::set_poi_lock()
 {
+    reset_poi_adjustment();
     saved_mount_mode = get_mode(); //save current mount mode for the suspend_poi_lock
     if (!roi_is_set()) {
         mnt_target.poi_start_ms = AP_HAL::millis();
         mnt_target.pointing_at_poi_at_home_alt = false;
     } else {  // there is a poi target, just turn POI tracking back on
         set_mode(MAV_MOUNT_MODE_GPS_POINT);
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
-                      _roi_target.lat * 1.0e-7,
-                      _roi_target.lng * 1.0e-7,
-                      _roi_target.alt * 0.01);
+        send_poi_location(_roi_target);
         mnt_target.poi_start_ms = 0;
     }
 }
@@ -268,13 +277,14 @@ void AP_Mount_Backend::set_poi_lock()
 // clear poi_lock - clear POI location and revert to default mode
 void AP_Mount_Backend::clear_poi_lock()
 {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: Cleared");
-        clear_roi_target();
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: Cleared");
+    clear_roi_target();
 }
 
 // suspend_poi_lock - revert to saved targeting mode, if it exists and POI target exists, otherwise do nothing
 void AP_Mount_Backend::suspend_poi_lock()
 {
+    reset_poi_adjustment();
     if (roi_is_set() && saved_mount_mode != MAV_MOUNT_MODE_ENUM_END) {
         set_mode(saved_mount_mode);    // set back to mode before GPS_POINT if its been set by switch going HIGH
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: Revert mode,target saved");;
@@ -293,10 +303,7 @@ void AP_Mount_Backend::update_poi_lock_target()
     if (!mnt_target.pointing_at_poi_at_home_alt) {
         if (calculate_poi_at_home_alt(target_location)) {
             set_roi_target(target_location);
-            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
-                          target_location.lat * 1.0e-7,
-                          target_location.lng * 1.0e-7,
-                          target_location.alt * 0.01);
+            send_poi_location(target_location);
         }
         // attempt the home-alt POI only once per switch engagement; retrying would repeat warnings at the update rate
         mnt_target.pointing_at_poi_at_home_alt = true;
@@ -327,10 +334,7 @@ void AP_Mount_Backend::update_poi_lock_target()
     // if that fails, give warning
     if (get_poi(_instance, quat, vehicle_location, target_location)) {
         set_roi_target(target_location);
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
-                      target_location.lat * 1.0e-7,
-                      target_location.lng * 1.0e-7,
-                      target_location.alt * 0.01);
+        send_poi_location(target_location);
         mnt_target.poi_start_ms = 0;
     } else if (AP_HAL::millis() - mnt_target.poi_start_ms > 5000) {
     //stop terrain-based POI calculation
@@ -340,6 +344,88 @@ void AP_Mount_Backend::update_poi_lock_target()
     // terrain-based POI is not available so the home-alt POI stands
     mnt_target.poi_start_ms = 0;
 #endif // AP_MOUNT_POI_TO_LATLONALT_ENABLED
+}
+
+bool AP_Mount_Backend::update_poi_adjustment()
+{
+    float roll_in;
+    float pitch_in;
+    float yaw_in;
+    get_rc_input(roll_in, pitch_in, yaw_in);
+    (void)roll_in;
+    const bool input_active = !is_zero(pitch_in) || !is_zero(yaw_in);
+    const uint32_t now_ms = AP_HAL::millis();
+
+    if (!poi_adjustment.active) {
+        if (!input_active || _params.rc_rate_max <= 0 || !get_angle_target_to_roi(mnt_target.angle_rad)) {
+            return false;
+        }
+        poi_adjustment.active = true;
+        poi_adjustment.last_input_ms = now_ms;
+        poi_adjustment.last_projection_ms = 0;
+#if AP_MOUNT_POI_TO_LATLONALT_ENABLED
+        WITH_SEMAPHORE(poi_calculation.sem);
+        poi_adjustment.last_result_ms = poi_calculation.poi_update_ms;
+#endif
+    }
+
+    if (input_active) {
+        poi_adjustment.last_input_ms = now_ms;
+    }
+
+    const float rc_rate_max_rads = radians(_params.rc_rate_max.get());
+    mnt_target.target_type = MountTargetType::RATE;
+    mnt_target.rate_rads.roll = 0.0f;
+    mnt_target.rate_rads.pitch = pitch_in * rc_rate_max_rads;
+    mnt_target.rate_rads.yaw = yaw_in * rc_rate_max_rads;
+    mnt_target.rate_rads.roll_is_ef = true;
+    mnt_target.rate_rads.pitch_is_ef = true;
+    mnt_target.rate_rads.yaw_is_ef = true;
+    mnt_target.last_rate_request_ms = now_ms;
+
+    if (poi_adjustment.last_projection_ms == 0 ||
+        now_ms - poi_adjustment.last_projection_ms >= AP_MOUNT_POI_ADJUSTMENT_UPDATE_MS) {
+        poi_adjustment.last_projection_ms = now_ms;
+        Location adjusted_target;
+        bool have_adjusted_target = false;
+#if AP_MOUNT_POI_TO_LATLONALT_ENABLED
+        Quaternion calculation_attitude;
+        Location calculation_location;
+        uint32_t result_ms;
+        if (get_poi_result(calculation_attitude, calculation_location, adjusted_target, result_ms) &&
+            result_ms != poi_adjustment.last_result_ms) {
+            poi_adjustment.last_result_ms = result_ms;
+            have_adjusted_target = true;
+        }
+#endif
+        if (!have_adjusted_target) {
+            have_adjusted_target = calculate_poi_at_home_alt(adjusted_target, false);
+        }
+        if (have_adjusted_target) {
+            _roi_target = adjusted_target;
+        }
+    }
+
+    if (now_ms - poi_adjustment.last_input_ms < AP_MOUNT_POI_ADJUSTMENT_IDLE_MS) {
+        return true;
+    }
+
+    reset_poi_adjustment();
+    send_poi_location(_roi_target);
+    return false;
+}
+
+void AP_Mount_Backend::reset_poi_adjustment()
+{
+    poi_adjustment = {};
+}
+
+void AP_Mount_Backend::send_poi_location(const Location &target_location) const
+{
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
+                  target_location.lat * 1.0e-7,
+                  target_location.lng * 1.0e-7,
+                  target_location.alt * 0.01);
 }
 
 #endif // AP_MOUNT_POI_LOCK_ENABLED
@@ -391,6 +477,10 @@ void AP_Mount_Backend::set_yaw_lock(bool yaw_lock)
 // clear_roi_target - clears target location that mount should attempt to point towards
 void AP_Mount_Backend::clear_roi_target()
 {
+#if AP_MOUNT_POI_LOCK_ENABLED
+    reset_poi_adjustment();
+#endif
+
     // clear the target GPS location
     _roi_target.zero();
 
@@ -698,6 +788,12 @@ void AP_Mount_Backend::write_log(uint64_t timestamp_us)
 // get poi information.  Returns true on success and fills in gimbal attitude, location and poi location
 bool AP_Mount_Backend::get_poi(uint8_t instance, Quaternion &quat, Location &loc, Location &poi_loc)
 {
+    uint32_t update_ms;
+    return get_poi_result(quat, loc, poi_loc, update_ms);
+}
+
+bool AP_Mount_Backend::get_poi_result(Quaternion &quat, Location &loc, Location &poi_loc, uint32_t &update_ms)
+{
     WITH_SEMAPHORE(poi_calculation.sem);
 
     // record time of request
@@ -717,6 +813,7 @@ bool AP_Mount_Backend::get_poi(uint8_t instance, Quaternion &quat, Location &loc
     quat = poi_calculation.att_quat;
     loc = poi_calculation.loc;
     poi_loc = poi_calculation.poi_loc;
+    update_ms = poi_calculation.poi_update_ms;
     return true;
 }
 
@@ -816,7 +913,7 @@ void AP_Mount_Backend::calculate_poi()
 
 #if AP_MOUNT_POI_LOCK_ENABLED
 // calculate location gimbal is pointing, at HOME altitude. Used if Terrain is not avaialble
-bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location)
+bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location, bool report_failure)
 {
     AP_AHRS &ahrs = AP::ahrs();
 
@@ -840,7 +937,9 @@ bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location)
     // mount attitude quaternion
     Quaternion quat;
     if (!get_attitude_quaternion(quat)) {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: Failure to mount angles");
+        if (report_failure) {
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: Failure to mount angles");
+        }
         return false;
     }
 
@@ -865,7 +964,9 @@ bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location)
 
      //just a safety check, should NEVER occur
      if (los_ned.length() < 1.0e-6f) {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: return on bad los");
+        if (report_failure) {
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: return on bad los");
+        }
         return false;
     }
     los_ned.normalize();
@@ -876,9 +977,11 @@ bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location)
     const float MIN_DOWN_DEG = 1.0f; // tune
     const float min_los_z = sinf(radians(MIN_DOWN_DEG)); // ~= 0.01745
     if (los_ned.z < min_los_z && target_down_m > 0.0f) {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO,
-                      "POI: Mount pitch too elevated (los.z=%.4f need >= %.4f; pitch=%.2f deg)",
-                      los_ned.z, min_los_z, degrees(m_pitch_rad));
+        if (report_failure) {
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO,
+                          "POI: Mount pitch too elevated (los.z=%.4f need >= %.4f; pitch=%.2f deg)",
+                          los_ned.z, min_los_z, degrees(m_pitch_rad));
+        }
         return false;
     }
 
@@ -899,8 +1002,10 @@ bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location)
 
     // Reject targets beyond 5 km (also naturally rejects near-horizon geometry that slips through)
     if (horiz_dist_m > 5000.0f) {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO,
-                      "POI: distance > 5km: %.1f m", horiz_dist_m);
+        if (report_failure) {
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO,
+                          "POI: distance > 5km: %.1f m", horiz_dist_m);
+        }
         return false;
     }
 
@@ -1261,6 +1366,11 @@ void AP_Mount_Backend::_update_mnt_target()
 
     case MAV_MOUNT_MODE_GPS_POINT:
         // point mount to a GPS point given by the mission planner
+#if AP_MOUNT_POI_LOCK_ENABLED
+        if (roi_is_set() && update_poi_adjustment()) {
+            return;
+        }
+#endif
         mnt_target.target_type = MountTargetType::LOCATION;
         return;
 
