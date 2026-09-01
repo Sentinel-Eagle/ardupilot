@@ -23,6 +23,7 @@ public:
     AP_Int16    pitch_angle_max;    // pitch angle max in degrees
     AP_Int16    yaw_angle_min;      // yaw angle min in degrees
     AP_Int16    yaw_angle_max;      // yaw angle max in degrees
+    AP_Int8     yaw_continuous;     // enable continuous yaw when configured for a full circle
 
     AP_Vector3f retract_angles;     // retracted position in degrees. vector.x = roll vector.y = pitch, vector.z=yaw
     AP_Vector3f neutral_angles;     // neutral position in degrees.  vector.x = roll vector.y = pitch, vector.z=yaw
