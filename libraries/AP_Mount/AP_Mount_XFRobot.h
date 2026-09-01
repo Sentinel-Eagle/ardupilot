@@ -144,6 +144,11 @@ private:
         return NATIVE_ANGLES_ONLY;
     };
 
+    // A full configured yaw circle opts continuous XFRobot mounts into wrapping.
+    bool yaw_range_is_continuous() const override {
+        return _params.yaw_angle_min <= -180 && _params.yaw_angle_max >= 180;
+    }
+
     // send_target_angles
     void send_target_angles(const MountAngleTarget& angle_target_rad) override;
 
