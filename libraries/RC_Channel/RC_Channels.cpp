@@ -117,6 +117,9 @@ bool RC_Channels::read_input(void)
     }
 
     if (success) {
+#if AP_CAMERA_ENABLED
+        read_camera_trigger();
+#endif
         rudder_arm_disarm_check();
     }
 
@@ -245,6 +248,24 @@ void RC_Channels::read_aux_all()
 }
 
 #if AP_CAMERA_ENABLED
+// check camera trigger switches on each fresh RC input
+void RC_Channels::read_camera_trigger()
+{
+    bool need_log = false;
+    for (uint8_t i=0; i<NUM_RC_CHANNELS; i++) {
+        RC_Channel *c = channel(i);
+        if ((c != nullptr) &&
+            ((RC_Channel::AUX_FUNC)c->option.get() == RC_Channel::AUX_FUNC::CAMERA_TRIGGER)) {
+            need_log |= c->read_aux();
+        }
+    }
+#if HAL_LOGGING_ENABLED
+    if (need_log) {
+        AP::logger().Write_RCIN();
+    }
+#endif
+}
+
 // update absolute camera zoom from the channel assigned CAMERA_ZOOM_ABS
 void RC_Channels::update_camera_zoom_absolute()
 {

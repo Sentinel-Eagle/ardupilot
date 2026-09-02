@@ -564,7 +564,7 @@ private:
 
     void reset_mode_switch();
     void read_mode_switch();
-    bool debounce_completed(int8_t position);
+    bool debounce_completed(int8_t position, uint16_t debounce_time_ms);
     // returns true if the first time we successfully read the
     // channel's three-position-switch position we should record that
     // position as the current position *without* executing the
@@ -796,6 +796,7 @@ private:
     bool _gcs_overrides_enabled = true;
 
 #if AP_CAMERA_ENABLED
+    void read_camera_trigger();
     void update_camera_zoom_absolute();
     int16_t _last_camera_zoom_pct_100 = -1;
     int16_t _last_camera_zoom_attempt_pct_100 = -1;
