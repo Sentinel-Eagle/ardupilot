@@ -163,7 +163,7 @@ void AP_Mount_XFRobot::update()
     // after compensating pitch and yaw for the camera's current field of view.
     if (mnt_target.target_type == MountTargetType::RATE) {
         MountRateTarget scaled_rate_rads = mnt_target.rate_rads;
-        const float rate_scale = image_rate_scale();
+        const float rate_scale = rgb_camera_primary ? image_rate_scale() : 1.0f;
         scaled_rate_rads.pitch *= rate_scale;
         scaled_rate_rads.yaw *= rate_scale;
         update_angle_target_from_rate(scaled_rate_rads, mnt_target.angle_rad);
@@ -214,7 +214,12 @@ bool AP_Mount_XFRobot::set_lens(uint8_t lens)
     GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s camera source %s", send_text_prefix, source_name_table[lens]);
 
     // map lens to camera type and send command
-    return send_simple_command(FunctionOrder::PIC_IN_PIC, (uint8_t)cam_type_table[lens]);
+    if (!send_simple_command(FunctionOrder::PIC_IN_PIC, (uint8_t)cam_type_table[lens])) {
+        return false;
+    }
+
+    rgb_camera_primary = lens == LensSource::RGB_NOTHING || lens == LensSource::RGB_THERMAL;
+    return true;
 }
 
 #if HAL_MOUNT_SET_CAMERA_SOURCE_ENABLED

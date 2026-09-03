@@ -321,6 +321,7 @@ private:
     float last_rgb_zoom_feedback_multiplier = 1.0f;
     float predicted_max_rgb_zoom_multiplier = 1.0f;
     PodCode detected_pod_code = static_cast<PodCode>(0);
+    bool rgb_camera_primary = true;
 
     // structure to decode incoming packets
     struct PACKED GCUSimpleReply {
