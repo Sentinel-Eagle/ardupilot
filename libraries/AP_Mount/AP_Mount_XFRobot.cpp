@@ -292,13 +292,19 @@ bool AP_Mount_XFRobot::set_zoom(ZoomType zoom_type, float zoom_value)
         } else if (zoom_value > 0) {
             zoom_fn = FunctionOrder::ZOOM_IN;
         }
-        return send_simple_command(zoom_fn, 0x01);
+        const bool sent = send_simple_command(zoom_fn, 0x01);
+        if (sent) {
+            zoom_target.pending = false;
+            zoom_target.learn_max_zoom = false;
+        }
+        return sent;
     }
     case ZoomType::PCT:
         if (!healthy()) {
             return false;
         }
-        zoom_target.pct_100 = constrain_float(zoom_value * ZOOM_PROTOCOL_UNITS_PER_PERCENT,
+        zoom_target.pct = constrain_float(zoom_value, 0.0f, 100.0f);
+        zoom_target.pct_100 = constrain_float(zoom_target.pct * ZOOM_PROTOCOL_UNITS_PER_PERCENT,
                                               ABSOLUTE_ZOOM_PROTOCOL_MIN,
                                               ABSOLUTE_ZOOM_PROTOCOL_MAX);
         zoom_target.pending = true;
@@ -432,7 +438,13 @@ void AP_Mount_XFRobot::process_packet()
         .update_ms = AP_HAL::millis()
     };
 
-    rgb_zoom_multiplier = MAX(1.0, le16toh(msg_buff.simple_reply.main.zoom_rate_rgb) / ZOOM_FEEDBACK_UNITS_PER_MULTIPLIER);
+    detected_pod_code = static_cast<PodCode>(msg_buff.simple_reply.main.pod_code);
+    const float zoom_feedback_multiplier = MAX(1.0f,
+                                               le16toh(msg_buff.simple_reply.main.zoom_rate_rgb) /
+                                               ZOOM_FEEDBACK_UNITS_PER_MULTIPLIER);
+    update_predicted_max_zoom_for_unknown_cameras(zoom_feedback_multiplier);
+    rgb_zoom_multiplier = zoom_feedback_multiplier;
+    last_rgb_zoom_feedback_multiplier = zoom_feedback_multiplier;
 
     // display hardware and firmware version
     if (!got_firmware_version) {
@@ -633,7 +645,53 @@ bool AP_Mount_XFRobot::send_zoom_pct()
     zoom_command.content.crc.crc_low = LOWBYTE(crc16);
 
     _uart->write(zoom_command.bytes, sizeof(ZoomCommand));
+
+    const float predicted_zoom_multiplier = get_predicted_zoom_multiplier(zoom_target.pct);
+    zoom_target.learn_max_zoom = !get_known_max_zoom_multiplier().has_value() &&
+                                 is_positive(zoom_target.pct) &&
+                                 (predicted_zoom_multiplier >= last_rgb_zoom_feedback_multiplier ||
+                                  zoom_target.pct >= 100.0f);
+    rgb_zoom_multiplier = predicted_zoom_multiplier;
     return true;
+}
+
+std::optional<float> AP_Mount_XFRobot::get_known_max_zoom_multiplier() const
+{
+    switch (detected_pod_code) {
+    case PodCode::Z1PRO:
+        return static_cast<float>(MaxZoomMultiplier::Z1PRO);
+    case PodCode::Z2PRO:
+        return static_cast<float>(MaxZoomMultiplier::Z2PRO);
+    default:
+        return {};
+    }
+}
+
+float AP_Mount_XFRobot::get_predicted_zoom_multiplier(float zoom_pct) const
+{
+    const float max_zoom_multiplier = get_known_max_zoom_multiplier().value_or(predicted_max_rgb_zoom_multiplier);
+    return 1.0f + zoom_pct * 0.01f * (max_zoom_multiplier - 1.0f);
+}
+
+void AP_Mount_XFRobot::update_predicted_max_zoom_for_unknown_cameras(float zoom_feedback_multiplier)
+{
+    if (!zoom_target.learn_max_zoom ||
+        get_known_max_zoom_multiplier().has_value()) {
+        zoom_target.learn_max_zoom = false;
+        return;
+    }
+
+    // Only learn while zoom is moving towards a larger multiplier.  This
+    // avoids treating feedback from a previous, larger target as the result
+    // of a new zoom-out command.
+    if (zoom_feedback_multiplier < last_rgb_zoom_feedback_multiplier) {
+        zoom_target.learn_max_zoom = false;
+        return;
+    }
+
+    const float zoom_fraction = zoom_target.pct * 0.01f;
+    const float predicted_max_zoom_multiplier = 1.0f + (zoom_feedback_multiplier - 1.0f) / zoom_fraction;
+    predicted_max_rgb_zoom_multiplier = MAX(predicted_max_rgb_zoom_multiplier, predicted_max_zoom_multiplier);
 }
 
 float AP_Mount_XFRobot::image_rate_scale() const
