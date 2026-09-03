@@ -1203,6 +1203,9 @@ ap_message GCS_MAVLINK::mavlink_id_to_ap_message_id(const uint32_t mavlink_id) c
 #if AP_MAVLINK_MSG_FLIGHT_INFORMATION_ENABLED
         { MAVLINK_MSG_ID_FLIGHT_INFORMATION, MSG_FLIGHT_INFORMATION},
 #endif
+#if HAL_NAVEKF3_AVAILABLE
+        { MAVLINK_MSG_ID_EAGLE_LANE_STATES,  MSG_EAGLE_LANE_STATES},
+#endif  // HAL_NAVEKF3_AVAILABLE
     };
 
     for (uint8_t i=0; i<ARRAY_SIZE(map); i++) {
@@ -6497,6 +6500,13 @@ bool GCS_MAVLINK::try_send_message(const enum ap_message id)
     case MSG_EKF_STATUS_REPORT:
         CHECK_PAYLOAD_SIZE(EKF_STATUS_REPORT);
         AP::ahrs().send_ekf_status_report(*this);
+        break;
+#endif
+
+#if HAL_NAVEKF3_AVAILABLE
+    case MSG_EAGLE_LANE_STATES:
+        CHECK_PAYLOAD_SIZE(EAGLE_LANE_STATES);
+        AP::ahrs().EKF3.send_eagle_lane_states_report(*this);
         break;
 #endif
 

@@ -272,7 +272,7 @@ static const ap_message STREAM_EXTENDED_STATUS_msgs[] = {
 static const ap_message STREAM_POSITION_msgs[] = {
 #if AP_AHRS_ENABLED
     MSG_LOCATION,
-    MSG_LOCAL_POSITION
+    MSG_LOCAL_POSITION,
 #endif  // AP_AHRS_ENABLED
 };
 
@@ -368,6 +368,9 @@ static const ap_message STREAM_EXTRA3_msgs[] = {
 #if AP_AHRS_ENABLED
     MSG_EKF_STATUS_REPORT,
 #endif  // AP_AHRS_ENABLED
+#if HAL_NAVEKF3_AVAILABLE
+    MSG_EAGLE_LANE_STATES,
+#endif  // HAL_NAVEKF3_AVAILABLE
 #if !APM_BUILD_TYPE(APM_BUILD_AntennaTracker)
     MSG_VIBRATION,
 #endif
