@@ -21,8 +21,6 @@
 
 static constexpr uint8_t SUB_FRAME_REQUEST_CODE = 0x01;
 static constexpr uint8_t CAMERA_1_MASK = 1U << 0;
-static constexpr uint8_t POD_CODE_Z1PRO = 49;
-static constexpr uint8_t POD_CODE_Z2PRO = 51;
 static constexpr int16_t ZPRO_YAW_MIN_CD = -140 * 100;
 static constexpr int16_t ZPRO_YAW_MAX_CD = 140 * 100;
 static constexpr float ZOOM_PROTOCOL_UNITS_PER_PERCENT = 100.0f;
@@ -446,7 +444,6 @@ void AP_Mount_XFRobot::process_packet()
         .yaw_bf_deg = msg_buff.simple_reply.main.angle_z * 0.01f,
         .update_ms = AP_HAL::millis()
     };
-    detected_pod_code = msg_buff.simple_reply.main.pod_code;
 
     detected_pod_code = static_cast<PodCode>(msg_buff.simple_reply.main.pod_code);
     const float zoom_feedback_multiplier = MAX(1.0f,
@@ -460,7 +457,7 @@ void AP_Mount_XFRobot::process_packet()
     if (!got_firmware_version) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s pod:%u hw:%.1f fw:%.1f",
                       send_text_prefix,
-                      detected_pod_code,
+                      static_cast<uint8_t>(detected_pod_code),
                       double(msg_buff.simple_reply.main.hardware_version * 0.1),
                       double(msg_buff.simple_reply.main.firmware_version * 0.1));
         got_firmware_version = true;
@@ -592,8 +589,8 @@ int16_t AP_Mount_XFRobot::constrain_yaw_target_cd(float yaw_control_rad) const
 {
     const float yaw_control_cd = degrees(yaw_control_rad) * 100;
     switch (detected_pod_code) {
-    case POD_CODE_Z1PRO:
-    case POD_CODE_Z2PRO:
+    case PodCode::Z1PRO:
+    case PodCode::Z2PRO:
         return constrain_int16(yaw_control_cd, ZPRO_YAW_MIN_CD, ZPRO_YAW_MAX_CD);
     default:
         return constrain_int16(yaw_control_cd, -180 * 100, 180 * 100);

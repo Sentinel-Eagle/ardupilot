@@ -363,7 +363,6 @@ private:
     } attitude_latest;
 
     // local variables
-    uint8_t detected_pod_code = 0;
     bool got_firmware_version = false;  // true once hardware and firmware version has been received
     struct {
         bool recording;         // true if currently recording video
