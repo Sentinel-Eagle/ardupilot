@@ -2080,7 +2080,7 @@ void NavEKF3::send_eagle_lane_states_report(GCS_MAVLINK &link) const
         return;
     }
 
-    mavlink_eagle_lane_states_t packet{};
+    mavlink_eagle_lanes_state_t packet{};
     packet.active_lane = primary;
     packet.lane_count = num_cores;
 
@@ -2102,7 +2102,7 @@ void NavEKF3::send_eagle_lane_states_report(GCS_MAVLINK &link) const
         packet.posxy_source[i] = uint8_t(core[i].get_posxy_source());
     }
 
-    mavlink_msg_eagle_lane_states_send_struct(link.get_chan(), &packet);
+    mavlink_msg_eagle_lanes_state_send_struct(link.get_chan(), &packet);
 }
 
 // provides the height limit to be observed by the control loops
