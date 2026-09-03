@@ -9,6 +9,7 @@
 
 #include "AP_Mount_Backend_Serial.h"
 #include <AP_Math/quaternion.h>
+#include <optional>
 
 #define AP_MOUNT_XFROBOT_RECV_LENGTH_MAX    80  // maximum number of bytes that will be received from the gimbal
 
@@ -71,6 +72,17 @@ protected:
     bool get_attitude_quaternion(Quaternion& att_quat) override;
 
 private:
+
+    enum class PodCode : uint8_t {
+        Z1PRO = 49,
+        Z2PRO = 51,
+    };
+
+    enum class MaxZoomMultiplier : uint8_t {
+        Z1PRO = 6,
+        Z2PRO = 8,
+        D80N = 40,
+    };
 
     // send text prefix string to reduce flash cost
     static const char* send_text_prefix;
@@ -153,6 +165,15 @@ private:
 
     // send the pending absolute zoom target
     bool send_zoom_pct();
+
+    // return the maximum zoom multiplier for a recognised camera model
+    std::optional<float> get_known_max_zoom_multiplier() const;
+
+    // predict the zoom multiplier corresponding to an absolute zoom percentage
+    float get_predicted_zoom_multiplier(float zoom_pct) const;
+
+    // learn the maximum zoom multiplier from percentage targets and feedback
+    void update_predicted_max_zoom_for_unknown_cameras(float zoom_feedback_multiplier);
 
     // scale angular motion so image motion remains constant as the FOV narrows
     float image_rate_scale() const;
@@ -291,10 +312,16 @@ private:
 
     struct {
         uint16_t pct_100;
+        float pct;
         bool pending;
-    } zoom_target;
+        bool learn_max_zoom;
+    } zoom_target {};
 
     float rgb_zoom_multiplier = 1.0f;
+    float last_rgb_zoom_feedback_multiplier = 1.0f;
+    float predicted_max_rgb_zoom_multiplier = 1.0f;
+    PodCode detected_pod_code = static_cast<PodCode>(0);
+    bool rgb_camera_primary = true;
 
     // structure to decode incoming packets
     struct PACKED GCUSimpleReply {
