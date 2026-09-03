@@ -298,6 +298,8 @@ public:
     // send an EKF_STATUS_REPORT message to GCS
     void send_status_report(class GCS_MAVLINK &link) const;
 
+    void send_eagle_lane_states_report(class GCS_MAVLINK &link) const;
+
     // provides the height limit to be observed by the control loops
     // returns false if no height limiting is required
     // this is needed to ensure the vehicle does not fly too high when using optical flow navigation

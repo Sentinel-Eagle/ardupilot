@@ -187,6 +187,9 @@ public:
     // P[7][7]+P[8][8]: NE position state variance (m²), used by lane-selection logic
     float get_pos_variance_NE(void) const;
 
+    // horizontal position source currently in use by this lane (posxy_source() itself is private)
+    AP_NavEKF_Source::SourceXY get_posxy_source(void) const { return posxy_source(); }
+
     // Maximum NE position state variance above which a lane is
     // considered ineligible as primary. Our ext-nav has variance that depends
     // on altitude, so this gets appropriately scaled.
