@@ -667,7 +667,11 @@ bool AP_Mount_XFRobot::send_zoom_pct() {
 }
 
 std::optional<float> AP_Mount_XFRobot::get_known_max_zoom_multiplier() const {
-    switch (detected_pod_code) {
+    if (!detected_pod_code.has_value()) {
+        return {};
+    }
+
+    switch (*detected_pod_code) {
     case PodCode::Z1PRO:
         return static_cast<float>(MaxZoomMultiplier::Z1PRO);
     case PodCode::Z2PRO:
