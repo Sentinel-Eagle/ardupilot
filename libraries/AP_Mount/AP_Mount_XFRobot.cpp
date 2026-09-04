@@ -4,21 +4,20 @@
 
 #include "AP_Mount_XFRobot.h"
 #include "AP_Mount_XFRobot_Carrier.h"
-
-#include <AP_AHRS/AP_AHRS.h>
 #include <AP_HAL/AP_HAL.h>
-#include <AP_HAL/utility/sparse-endian.h>
+#include <AP_AHRS/AP_AHRS.h>
 #include <GCS_MAVLink/GCS.h>
+#include <AP_HAL/utility/sparse-endian.h>
 
-#define SEND_ATTITUDE_TARGET_MS 1000 // send angle targets to gimbal at least once per second
-#define HEALTH_TIMEOUT_MS 1000 // become unhealthy if attitude not received within 1 second
-#define RECORD_REQUEST_TIMEOUT_MS 1000 // requests to start/stop recording timeout in 1 second
-#define SEND_HEADER1 0xA8 // send packet header1
-#define SEND_HEADER2 0xE5 // send packet header2
-#define RECV_HEADER1 0x8A // receive packet header1
-#define RECV_HEADER2 0x5E // receive packet header2
-#define RECV_LENGTH_MIN 10 // receive packet minimum length in bytes
-#define PROTOCOL_VERSION 0x02 // protocol version
+#define SEND_ATTITUDE_TARGET_MS     1000    // send angle targets to gimbal at least once per second
+#define HEALTH_TIMEOUT_MS           1000    // become unhealthy if attitude not received within 1 second
+#define RECORD_REQUEST_TIMEOUT_MS   1000    // requests to start/stop recording timeout in 1 second
+#define SEND_HEADER1                0xA8    // send packet header1
+#define SEND_HEADER2                0xE5    // send packet header2
+#define RECV_HEADER1                0x8A    // receive packet header1
+#define RECV_HEADER2                0x5E    // receive packet header2
+#define RECV_LENGTH_MIN             10      // receive packet minimum length in bytes
+#define PROTOCOL_VERSION            0x02    // protocol version
 
 static constexpr uint8_t SUB_FRAME_REQUEST_CODE = 0x01;
 static constexpr uint8_t CAMERA_1_MASK = 1U << 0;
@@ -99,33 +98,46 @@ enum LensSource : uint8_t {
 // byte 2~3: length (uint16)
 // byte 4: version
 // below is "main data frame"
-// byte 5: mode: 0x10:angle control, 0x11:head lock, 0x12: head follow, 0x13:orthoview, 0x14:euler angle control,
-// 0x16:gaze, 0x17:track,0x1C:FPV byte 6~7: status, Bit0:tracking success, Bit7:range and target coordinate valid,
-// Bit8:ranging on, Bit9:night vision on, Bit10:lighting on, Bit12:Upward powered on byte 8~9: horizontal target (int16,
-// -1000 ~ +1000, rightward is positive) byte 10~11: vertical target (int16, -1000 ~ +1000, downward is positive) byte
-// 12~13: x-axis angle of camera relative to vehicle (int16, -18000 ~ +18000) byte 14~15: y-axis angle of camera
-// relative to vehicle (int16, -18000 ~ +18000) byte 16~17: z-axis angle of camera relative to vehicle (int16, -18000 ~
-// +18000) byte 18~19: roll angle of camera (absolute) (int16, -9000 ~ +9000) byte 20~21: pitch angle of camera
-// (absolute) (int16, -18000 ~ +18000) byte 22~23: yaw angle of camera (absolute) (uint16, 0 ~ 36000) byte 24~25: X-axis
-// absolute angular velocity of camera (int16, centi-degrees/s) byte 26~27: Y-axis absolute angular velocity of camera
-// (int16, centi-degrees/s) byte 28~29: Z-axis absolute angular velocity of camera (int16, centi-degrees/s) byte 30~36:
-// reserved/unused above is end of "main data frame", below is "sub data frame" byte 37: header (0x01) byte 38: hardware
-// version (uint8) byte 39: firmware version (uint8) byte 40: pod code byte 41~42: error code, Bit7:hardware error,
-// Bit13: mavlink communication freq anomaly, Bit14:BNSS unpositioned, Bit15:GCU hardware error byte 43~46: distance
-// from target (int32, decimeters, -1m or 0m is invalid measurement) byte 47~50: longitude of target (int32, 1E7) byte
-// 51~54: latitude of target (int32, 1E7) byte 55~58: altitude of target (int32, mm) byte 59~60: zoom rate of RGB camera
-// (uint16, resolution 0.1x) byte 61~62: zoom rate of thermal camera (uint16, resolution 0.1x) byte 63: thermal camera
-// status, Bit0:low temp alert, Bit1:high temp alert, Bit3:spot temp measurement on, Bit4:Isotherm on, Bit5:temp alert
-// on, Bit6:area temp on, Bit7:temp available byte 64~65: camera status, Bit0~Bit2:pic-in-pic mode, Bit4:recording,
-// Bit11:image auto reverse off, Bit12:OSD displays target coordinate, Bit13:OSD on, Bit14:digital zoom on, Bit15:target
-// detection on byte 66: timezone (int8, -12 ~ +12) byte 67~68: reserved/unused end of "sub data frame" byte 69: order
+// byte 5: mode: 0x10:angle control, 0x11:head lock, 0x12: head follow, 0x13:orthoview, 0x14:euler angle control, 0x16:gaze, 0x17:track,0x1C:FPV
+// byte 6~7: status, Bit0:tracking success, Bit7:range and target coordinate valid, Bit8:ranging on, Bit9:night vision on, Bit10:lighting on, Bit12:Upward powered on
+// byte 8~9: horizontal target (int16, -1000 ~ +1000, rightward is positive)
+// byte 10~11: vertical target (int16, -1000 ~ +1000, downward is positive)
+// byte 12~13: x-axis angle of camera relative to vehicle (int16, -18000 ~ +18000)
+// byte 14~15: y-axis angle of camera relative to vehicle (int16, -18000 ~ +18000)
+// byte 16~17: z-axis angle of camera relative to vehicle (int16, -18000 ~ +18000)
+// byte 18~19: roll angle of camera (absolute) (int16, -9000 ~ +9000)
+// byte 20~21: pitch angle of camera (absolute) (int16, -18000 ~ +18000)
+// byte 22~23: yaw angle of camera (absolute) (uint16, 0 ~ 36000)
+// byte 24~25: X-axis absolute angular velocity of camera (int16, centi-degrees/s)
+// byte 26~27: Y-axis absolute angular velocity of camera (int16, centi-degrees/s)
+// byte 28~29: Z-axis absolute angular velocity of camera (int16, centi-degrees/s)
+// byte 30~36: reserved/unused
+// above is end of "main data frame", below is "sub data frame"
+// byte 37: header (0x01)
+// byte 38: hardware version (uint8)
+// byte 39: firmware version (uint8)
+// byte 40: pod code
+// byte 41~42: error code, Bit7:hardware error, Bit13: mavlink communication freq anomaly, Bit14:BNSS unpositioned, Bit15:GCU hardware error
+// byte 43~46: distance from target (int32, decimeters, -1m or 0m is invalid measurement)
+// byte 47~50: longitude of target (int32, 1E7)
+// byte 51~54: latitude of target (int32, 1E7)
+// byte 55~58: altitude of target (int32, mm)
+// byte 59~60: zoom rate of RGB camera (uint16, resolution 0.1x)
+// byte 61~62: zoom rate of thermal camera (uint16, resolution 0.1x)
+// byte 63: thermal camera status, Bit0:low temp alert, Bit1:high temp alert, Bit3:spot temp measurement on, Bit4:Isotherm on, Bit5:temp alert on, Bit6:area temp on, Bit7:temp available
+// byte 64~65: camera status, Bit0~Bit2:pic-in-pic mode, Bit4:recording, Bit11:image auto reverse off, Bit12:OSD displays target coordinate, Bit13:OSD on, Bit14:digital zoom on, Bit15:target detection on
+// byte 66: timezone (int8, -12 ~ +12)
+// byte 67~68: reserved/unused
+// end of "sub data frame"
+// byte 69: order
 // byte 70 ~ S-3: execution state (variable length)
 // byte S-2: CRC high
 // byte S-1: CRC low
 ////////////////////////////////////////////////////////
 
 // update mount position - should be called periodically
-void AP_Mount_XFRobot::update() {
+void AP_Mount_XFRobot::update()
+{
     AP_Mount_Backend::update();
 
     // exit immediately if not initialised
@@ -163,30 +175,32 @@ void AP_Mount_XFRobot::update() {
 }
 
 // return true if healthy
-bool AP_Mount_XFRobot::healthy() const {
+bool AP_Mount_XFRobot::healthy() const
+{
     // healthy if initialised and attitude from gimbal has been received within the last second
-    return _initialised && (attitude_latest.update_ms != 0) &&
-        (AP_HAL::millis() - attitude_latest.update_ms) < HEALTH_TIMEOUT_MS;
+    return _initialised && (attitude_latest.update_ms != 0) && (AP_HAL::millis() - attitude_latest.update_ms) < HEALTH_TIMEOUT_MS;
 }
 
 // take a picture.  returns true on success
-bool AP_Mount_XFRobot::take_picture() {
+bool AP_Mount_XFRobot::take_picture()
+{
     GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s take picture", send_text_prefix);
 
     // send command to take picture
     return send_simple_command(FunctionOrder::SHUTTER, 0x01);
 }
 
-// set camera lens
-bool AP_Mount_XFRobot::set_lens(uint8_t lens) {
+//set camera lens
+bool AP_Mount_XFRobot::set_lens(uint8_t lens)
+{
     // lens to camera type mapping table
-    static const CameraType cam_type_table[]{
+    static const CameraType cam_type_table[] {
         CameraType::MAIN_ZOOM_SUB_THERMAL,
         CameraType::MAIN_THERMAL_SUB_ZOOM,
         CameraType::MAIN_PIP_ZOOM_SUB_THERMAL,
         CameraType::MAIN_PIP_THERMAL_SUB_ZOOM,
     };
-    static const char *const source_name_table[]{
+    static const char* const source_name_table[] {
         "RGB",
         "thermal",
         "RGB/thermal",
@@ -241,7 +255,8 @@ bool AP_Mount_XFRobot::set_camera_source(uint8_t primary_source, uint8_t seconda
 
 // start or stop video recording.  returns true on success
 // set start_recording = true to start record, false to stop recording
-bool AP_Mount_XFRobot::record_video(bool start_recording) {
+bool AP_Mount_XFRobot::record_video(bool start_recording)
+{
     // reject request if waiting for reply on earlier request
     if (recording.request_ms > 0) {
         return false;
@@ -257,27 +272,30 @@ bool AP_Mount_XFRobot::record_video(bool start_recording) {
     return false;
 }
 
-void AP_Mount_XFRobot::yaw_lock_changed(bool yaw_lock) {
+void AP_Mount_XFRobot::yaw_lock_changed(bool yaw_lock)
+{
     GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s yaw lock %s", send_text_prefix, yaw_lock ? "HIGH" : "LOW");
 }
 
-float AP_Mount_XFRobot::get_vehicle_yaw_rad() const {
+float AP_Mount_XFRobot::get_vehicle_yaw_rad() const
+{
     return AP_Mount_XFRobot_Carrier::get_yaw_rad(AP_HAL::millis());
 }
 
-bool AP_Mount_XFRobot::get_vehicle_location(Location &location) const {
+bool AP_Mount_XFRobot::get_vehicle_location(Location& location) const
+{
     return AP_Mount_XFRobot_Carrier::get_location(AP_HAL::millis(), location);
 }
 
 // set zoom specified as a rate or percentage
-bool AP_Mount_XFRobot::set_zoom(ZoomType zoom_type, float zoom_value) {
+bool AP_Mount_XFRobot::set_zoom(ZoomType zoom_type, float zoom_value)
+{
     switch (zoom_type) {
     case ZoomType::RATE: {
         FunctionOrder zoom_fn = FunctionOrder::ZOOM_STOP;
         if (zoom_value < 0) {
             zoom_fn = FunctionOrder::ZOOM_OUT;
-        }
-        else if (zoom_value > 0) {
+        } else if (zoom_value > 0) {
             zoom_fn = FunctionOrder::ZOOM_IN;
         }
         const bool sent = send_simple_command(zoom_fn, 0x01);
@@ -302,7 +320,8 @@ bool AP_Mount_XFRobot::set_zoom(ZoomType zoom_type, float zoom_value) {
 
 // set focus specified as rate, percentage or auto
 // focus in = -1, focus hold = 0, focus out = 1
-SetFocusResult AP_Mount_XFRobot::set_focus(FocusType focus_type, float focus_value) {
+SetFocusResult AP_Mount_XFRobot::set_focus(FocusType focus_type, float focus_value)
+{
     if (focus_type == FocusType::AUTO) {
         // send auto focus command
         return send_simple_command(FunctionOrder::FOCUS, 0x01) ? SetFocusResult::ACCEPTED : SetFocusResult::FAILED;
@@ -313,22 +332,22 @@ SetFocusResult AP_Mount_XFRobot::set_focus(FocusType focus_type, float focus_val
 }
 
 // get attitude as a quaternion.  returns true on success
-bool AP_Mount_XFRobot::get_attitude_quaternion(Quaternion &att_quat) {
+bool AP_Mount_XFRobot::get_attitude_quaternion(Quaternion& att_quat)
+{
     if (!healthy()) {
         return false;
     }
 
-    att_quat.from_euler(
-        radians(attitude_latest.roll_ef_deg), radians(attitude_latest.pitch_ef_deg), radians(attitude_latest.yaw_bf_deg)
-    );
+    att_quat.from_euler(radians(attitude_latest.roll_ef_deg), radians(attitude_latest.pitch_ef_deg), radians(attitude_latest.yaw_bf_deg));
     return true;
 }
 
 // reading incoming packets from gimbal
-void AP_Mount_XFRobot::read_incoming_packets() {
+void AP_Mount_XFRobot::read_incoming_packets()
+{
     // check for bytes on the serial port
     int16_t nbytes = MIN(_uart->available(), 1024U);
-    if (nbytes <= 0) {
+    if (nbytes <= 0 ) {
         return;
     }
 
@@ -360,8 +379,7 @@ void AP_Mount_XFRobot::read_incoming_packets() {
         case ParseState::WAITING_FOR_HEADER2:
             if (b == RECV_HEADER2) {
                 parser.state = ParseState::WAITING_FOR_LENGTH_LOW;
-            }
-            else {
+            } else {
                 reset_parser = true;
             }
             break;
@@ -370,11 +388,10 @@ void AP_Mount_XFRobot::read_incoming_packets() {
             parser.state = ParseState::WAITING_FOR_LENGTH_HIGH;
             break;
         case ParseState::WAITING_FOR_LENGTH_HIGH:
-            parser.len_expected |= ((uint16_t) b << 8);
+            parser.len_expected |= ((uint16_t)b << 8);
             if (parser.len_expected < RECV_LENGTH_MIN || parser.len_expected > AP_MOUNT_XFROBOT_RECV_LENGTH_MAX) {
                 reset_parser = true;
-            }
-            else {
+            } else {
                 parser.state = ParseState::WAITING_FOR_DATA;
             }
             break;
@@ -385,7 +402,7 @@ void AP_Mount_XFRobot::read_incoming_packets() {
             }
             break;
         case ParseState::WAITING_FOR_CRC_HIGH:
-            parser.crc = (uint16_t) b << 8;
+            parser.crc = (uint16_t)b << 8;
             parser.state = ParseState::WAITING_FOR_CRC_LOW;
             break;
         case ParseState::WAITING_FOR_CRC_LOW:
@@ -409,7 +426,8 @@ void AP_Mount_XFRobot::read_incoming_packets() {
 }
 
 // process successfully decoded packets held in the msg_buff structure
-void AP_Mount_XFRobot::process_packet() {
+void AP_Mount_XFRobot::process_packet()
+{
     // sanity check size of packet received
     if (msg_buff_len < sizeof(GCUSimpleReply)) {
         return;
@@ -432,51 +450,36 @@ void AP_Mount_XFRobot::process_packet() {
 
     // display hardware and firmware version
     if (!got_firmware_version) {
-        GCS_SEND_TEXT(
-            MAV_SEVERITY_INFO,
-            "%s hw:%.1f fw:%.1f",
-            send_text_prefix,
-            double(msg_buff.simple_reply.main.hardware_version * 0.1),
-            double(msg_buff.simple_reply.main.firmware_version * 0.1)
-        );
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s hw:%.1f fw:%.1f", send_text_prefix, double(msg_buff.simple_reply.main.hardware_version * 0.1), double(msg_buff.simple_reply.main.firmware_version * 0.1));
         got_firmware_version = true;
     }
 
     // detect failure to take picture
-    if (msg_buff.simple_reply.main.order == FunctionOrder::SHUTTER &&
-        msg_buff.simple_reply.param.execution_state == 0x01)
-    {
+    if (msg_buff.simple_reply.main.order == FunctionOrder::SHUTTER && msg_buff.simple_reply.param.execution_state == 0x01) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s failed to take picture", send_text_prefix);
     }
 
     // check for failure to start/stop recording
     if (msg_buff.simple_reply.main.order == FunctionOrder::RECORD_VIDEO) {
         if (msg_buff.simple_reply.param.execution_state == 0x0) {
-            GCS_SEND_TEXT(
-                MAV_SEVERITY_INFO, "%s recording %s", send_text_prefix, recording.request_start ? "ON" : "OFF"
-            );
-        }
-        else {
-            GCS_SEND_TEXT(
-                MAV_SEVERITY_INFO,
-                "%s failed to %s recording",
-                send_text_prefix,
-                recording.request_start ? "start" : "stop"
-            );
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s recording %s", send_text_prefix, recording.request_start ? "ON" : "OFF");
+        } else {
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s failed to %s recording", send_text_prefix, recording.request_start ? "start" : "stop");
         }
         recording.request_ms = 0;
     }
 }
 
 // send_target_angles
-void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget &angle_target_rad) {
+void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget& angle_target_rad)
+{
     // exit immediately if not initialised or not enough space to send packet
     if (!_initialised || _uart->txspace() < sizeof(SetAttitudePacket)) {
         return;
     }
 
     // prepare packet to send to gimbal
-    SetAttitudePacket set_attitude_packet{};
+    SetAttitudePacket set_attitude_packet {};
 
     // bytes 0~1: headers
     set_attitude_packet.content.main.header1 = SEND_HEADER1;
@@ -493,13 +496,10 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget &angle_target_r
     // byte 5~6: roll control value (int16, -18000 ~ +18000)
     // byte 7~8: pitch control value (int16, -18000 ~ +18000)
     // byte 9~10: yaw control value (int16, -18000 ~ +18000)
-    set_attitude_packet.content.main.roll_control =
-        htole16(constrain_int16(degrees(angle_target_rad.roll) * 100, -18000, 18000));
-    set_attitude_packet.content.main.pitch_control =
-        htole16(constrain_int16(degrees(angle_target_rad.pitch) * 100, -9000, 9000));
+    set_attitude_packet.content.main.roll_control = htole16(constrain_int16(degrees(angle_target_rad.roll) * 100, -180 * 100, 180 * 100));
+    set_attitude_packet.content.main.pitch_control = htole16(constrain_int16(degrees(angle_target_rad.pitch) * 100, -90 * 100, 90 * 100));
     const float yaw_control_rad = angle_target_rad.get_bf_yaw(carrier.yaw_rad);
-    set_attitude_packet.content.main.yaw_control =
-        htole16(constrain_int16(degrees(yaw_control_rad) * 100, -18000, 18000));
+    set_attitude_packet.content.main.yaw_control = htole16(constrain_int16(degrees(yaw_control_rad) * 100, -180 * 100, 180 * 100));
 
     // byte 11: status, Bit0:INS valid, Bit2:control values valid
     const uint8_t status_ins_bit = carrier.ins_valid ? (1 << 0) : 0;
@@ -508,31 +508,24 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget &angle_target_r
     // byte 12~13: absolute roll angle of vehicle (int16, -18000 ~ +18000)
     // byte 14~15: absolute pitch angle of vehicle (int16, -9000 ~ +9000)
     // byte 16~17: absolute yaw angle of vehicle (uint16, 0 ~ 36000)
-    set_attitude_packet.content.main.roll_abs = htole16(constrain_int16(carrier.roll_deg * 100, -18000, 18000));
-    set_attitude_packet.content.main.pitch_abs = htole16(constrain_int16(carrier.pitch_deg * 100, -9000, 9000));
-    set_attitude_packet.content.main.yaw_abs =
-        htole16(constrain_int32(degrees(wrap_2PI(carrier.yaw_rad)) * 100, 0, 35999));
+    set_attitude_packet.content.main.roll_abs = htole16(constrain_int16(carrier.roll_deg * 100, -180 * 100, 180 * 100));
+    set_attitude_packet.content.main.pitch_abs = htole16(constrain_int16(carrier.pitch_deg * 100, -90 * 100, 90 * 100));
+    set_attitude_packet.content.main.yaw_abs = htole16(constrain_int32(degrees(wrap_2PI(carrier.yaw_rad)) * 100, 0, 360 * 100 - 1));
 
     // byte 18~19: North acceleration of vehicle (int16, cm/s/s)
     // byte 20~21: East acceleration of vehicle (int16, cm/s/s)
     // byte 22~23: Upward acceleration of vehicle (int16, cm/s/s)
-    set_attitude_packet.content.main.accel_north =
-        htole16(constrain_int16(carrier.accel_neu_mss.x * 100, -INT16_MAX, INT16_MAX));
-    set_attitude_packet.content.main.accel_east =
-        htole16(constrain_int16(carrier.accel_neu_mss.y * 100, -INT16_MAX, INT16_MAX));
-    set_attitude_packet.content.main.accel_up =
-        htole16(constrain_int16(carrier.accel_neu_mss.z * 100, -INT16_MAX, INT16_MAX));
+    set_attitude_packet.content.main.accel_north = htole16(constrain_int16(carrier.accel_neu_mss.x * 100, -INT16_MAX, INT16_MAX));
+    set_attitude_packet.content.main.accel_east = htole16(constrain_int16(carrier.accel_neu_mss.y * 100, -INT16_MAX, INT16_MAX));
+    set_attitude_packet.content.main.accel_up = htole16(constrain_int16(carrier.accel_neu_mss.z * 100, -INT16_MAX, INT16_MAX));
 
     // byte 24~25: North speed of vehicle (int16, decimeter/s)
     // byte 26~27: East speed of vehicle (int16, decimeter/s)
     // byte 28~29: Upward speed of vehicle (int16, decimeter/s)
     // ToDo: check scale (cm/s or decimeter/s)
-    set_attitude_packet.content.main.vel_north =
-        htole16(constrain_int16(carrier.velocity_neu_ms.x * 10, -INT16_MAX, INT16_MAX));
-    set_attitude_packet.content.main.vel_east =
-        htole16(constrain_int16(carrier.velocity_neu_ms.y * 10, -INT16_MAX, INT16_MAX));
-    set_attitude_packet.content.main.vel_up =
-        htole16(constrain_int16(carrier.velocity_neu_ms.z * 10, -INT16_MAX, INT16_MAX));
+    set_attitude_packet.content.main.vel_north = htole16(constrain_int16(carrier.velocity_neu_ms.x * 10, -INT16_MAX, INT16_MAX));
+    set_attitude_packet.content.main.vel_east = htole16(constrain_int16(carrier.velocity_neu_ms.y * 10, -INT16_MAX, INT16_MAX));
+    set_attitude_packet.content.main.vel_up = htole16(constrain_int16(carrier.velocity_neu_ms.z * 10, -INT16_MAX, INT16_MAX));
 
     // byte 30: request code of sub frame, header of requested sub data frame from GCU (aka camera)
     set_attitude_packet.content.main.request_code = 0x01;
@@ -585,14 +578,15 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget &angle_target_r
 
 // send simple (1byte) command to gimbal (e.g. take pic, start recording)
 // returns true on success, false on failure to send
-bool AP_Mount_XFRobot::send_simple_command(FunctionOrder order, uint8_t param) {
+bool AP_Mount_XFRobot::send_simple_command(FunctionOrder order, uint8_t param)
+{
     // exit immediately if not healthy or command buffer is too large
     if (!healthy() || _uart->txspace() < sizeof(SimpleCommand)) {
         return false;
     }
 
     // prepare packet to send to gimbal
-    SimpleCommand simple_command{};
+    SimpleCommand simple_command {};
 
     // bytes 0~1: headers
     simple_command.content.main.header1 = SEND_HEADER1;
@@ -635,12 +629,13 @@ uint16_t AP_Mount_XFRobot::get_xfrobot_zoom_centipercent() const {
 }
 
 // send the pending absolute zoom target
-bool AP_Mount_XFRobot::send_zoom_pct() {
+bool AP_Mount_XFRobot::send_zoom_pct()
+{
     if (!healthy() || _uart->txspace() < sizeof(ZoomCommand)) {
         return false;
     }
 
-    ZoomCommand zoom_command{};
+    ZoomCommand zoom_command {};
     zoom_command.content.main.header1 = SEND_HEADER1;
     zoom_command.content.main.header2 = SEND_HEADER2;
     zoom_command.content.main.length = htole16(sizeof(ZoomCommand));
@@ -712,7 +707,8 @@ float AP_Mount_XFRobot::image_rate_scale() const {
 }
 
 // check for recording timeout
-void AP_Mount_XFRobot::check_recording_timeout() {
+void AP_Mount_XFRobot::check_recording_timeout()
+{
     // return immediately if not starting/stopping recording
     if (recording.request_ms == 0) {
         return;
@@ -720,9 +716,7 @@ void AP_Mount_XFRobot::check_recording_timeout() {
 
     // check for timeout
     if (AP_HAL::millis() - recording.request_ms > RECORD_REQUEST_TIMEOUT_MS) {
-        GCS_SEND_TEXT(
-            MAV_SEVERITY_INFO, "%s failed to %s recording", send_text_prefix, recording.request_start ? "start" : "stop"
-        );
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s failed to %s recording", send_text_prefix, recording.request_start ? "start" : "stop");
         recording.request_ms = 0;
     }
 }
