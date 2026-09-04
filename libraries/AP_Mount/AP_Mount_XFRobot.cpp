@@ -28,7 +28,7 @@ static constexpr float ZOOM_FEEDBACK_UNITS_PER_MULTIPLIER = 10.0f;
 static constexpr uint16_t ABSOLUTE_ZOOM_PROTOCOL_MIN = 1U;
 static constexpr uint16_t ABSOLUTE_ZOOM_PROTOCOL_MAX = 10000U;
 
-const char* AP_Mount_XFRobot::send_text_prefix = "XFRobot:";
+const char *AP_Mount_XFRobot::send_text_prefix = "XFRobot:";
 
 enum CameraSource : uint8_t {
     DEFAULT = 0,
@@ -163,14 +163,15 @@ void AP_Mount_XFRobot::update()
 
     // XFRobot only accepts angle targets, so rate targets are integrated here
     // after compensating pitch and yaw for the camera's current field of view.
-    if (mnt_target.target_type == MountTargetType::RATE) {
+    if (mnt_target.target_type == MountTargetType::RATE and rgb_camera_primary) {
         MountRateTarget scaled_rate_rads = mnt_target.rate_rads;
-        const float rate_scale = rgb_camera_primary ? image_rate_scale() : 1.0f;
+        const float rate_scale = image_rate_scale();
         scaled_rate_rads.pitch *= rate_scale;
         scaled_rate_rads.yaw *= rate_scale;
         update_angle_target_from_rate(scaled_rate_rads, mnt_target.angle_rad);
         send_target_angles(mnt_target.angle_rad);
-    } else {
+    }
+    else {
         send_target_to_gimbal();
     }
 }
@@ -216,7 +217,7 @@ bool AP_Mount_XFRobot::set_lens(uint8_t lens)
     GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s camera source %s", send_text_prefix, source_name_table[lens]);
 
     // map lens to camera type and send command
-    if (!send_simple_command(FunctionOrder::PIC_IN_PIC, (uint8_t)cam_type_table[lens])) {
+    if (!send_simple_command(FunctionOrder::PIC_IN_PIC, (uint8_t) cam_type_table[lens])) {
         return false;
     }
 
@@ -310,10 +311,7 @@ bool AP_Mount_XFRobot::set_zoom(ZoomType zoom_type, float zoom_value)
         if (!healthy()) {
             return false;
         }
-        zoom_target.pct = constrain_float(zoom_value, 0.0f, 100.0f);
-        zoom_target.pct_100 = constrain_float(zoom_target.pct * ZOOM_PROTOCOL_UNITS_PER_PERCENT,
-                                              ABSOLUTE_ZOOM_PROTOCOL_MIN,
-                                              ABSOLUTE_ZOOM_PROTOCOL_MAX);
+        zoom_target.percent = constrain_float(zoom_value, 0.0f, 100.0f);
         zoom_target.pending = true;
         return true;
     }
@@ -446,18 +444,18 @@ void AP_Mount_XFRobot::process_packet()
     };
 
     detected_pod_code = static_cast<PodCode>(msg_buff.simple_reply.main.pod_code);
-    const float zoom_feedback_multiplier = MAX(1.0f,
-                                               le16toh(msg_buff.simple_reply.main.zoom_rate_rgb) /
-                                               ZOOM_FEEDBACK_UNITS_PER_MULTIPLIER);
+    const float zoom_feedback_multiplier =
+        MAX(1.0f, le16toh(msg_buff.simple_reply.main.zoom_rate_rgb) / ZOOM_FEEDBACK_UNITS_PER_MULTIPLIER);
     update_predicted_max_zoom_for_unknown_cameras(zoom_feedback_multiplier);
     rgb_zoom_multiplier = zoom_feedback_multiplier;
     last_rgb_zoom_feedback_multiplier = zoom_feedback_multiplier;
 
     // display hardware and firmware version
     if (!got_firmware_version) {
+        const uint8_t pod_code = detected_pod_code.has_value() ? static_cast<uint8_t>(detected_pod_code.value()) : 0;
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s pod:%u hw:%.1f fw:%.1f",
                       send_text_prefix,
-                      static_cast<uint8_t>(detected_pod_code),
+                      pod_code,
                       double(msg_buff.simple_reply.main.hardware_version * 0.1),
                       double(msg_buff.simple_reply.main.firmware_version * 0.1));
         got_firmware_version = true;
@@ -505,8 +503,8 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget& angle_target_r
     // byte 5~6: roll control value (int16, -18000 ~ +18000)
     // byte 7~8: pitch control value (int16, -18000 ~ +18000)
     // byte 9~10: yaw control value (int16, -18000 ~ +18000)
-    set_attitude_packet.content.main.roll_control = htole16(constrain_int16(degrees(angle_target_rad.roll) * 100, -18000, 18000));
-    set_attitude_packet.content.main.pitch_control = htole16(constrain_int16(degrees(angle_target_rad.pitch) * 100, -9000, 9000));
+    set_attitude_packet.content.main.roll_control = htole16(constrain_int16(degrees(angle_target_rad.roll) * 100, -180 * 100, 180 * 100));
+    set_attitude_packet.content.main.pitch_control = htole16(constrain_int16(degrees(angle_target_rad.pitch) * 100, -90 * 100, 90 * 100));
     const float yaw_control_rad = angle_target_rad.get_bf_yaw(carrier.yaw_rad);
     set_attitude_packet.content.main.yaw_control = htole16(constrain_yaw_target_cd(yaw_control_rad));
 
@@ -517,9 +515,9 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget& angle_target_r
     // byte 12~13: absolute roll angle of vehicle (int16, -18000 ~ +18000)
     // byte 14~15: absolute pitch angle of vehicle (int16, -9000 ~ +9000)
     // byte 16~17: absolute yaw angle of vehicle (uint16, 0 ~ 36000)
-    set_attitude_packet.content.main.roll_abs = htole16(constrain_int16(carrier.roll_deg * 100, -18000, 18000));
-    set_attitude_packet.content.main.pitch_abs = htole16(constrain_int16(carrier.pitch_deg * 100, -9000, 9000));
-    set_attitude_packet.content.main.yaw_abs = htole16(constrain_int32(degrees(wrap_2PI(carrier.yaw_rad)) * 100, 0, 35999));
+    set_attitude_packet.content.main.roll_abs = htole16(constrain_int16(carrier.roll_deg * 100, -180 * 100, 180 * 100));
+    set_attitude_packet.content.main.pitch_abs = htole16(constrain_int16(carrier.pitch_deg * 100, -90 * 100, 90 * 100));
+    set_attitude_packet.content.main.yaw_abs = htole16(constrain_int32(degrees(wrap_2PI(carrier.yaw_rad)) * 100, 0, 360 * 100 - 1));
 
     // byte 18~19: North acceleration of vehicle (int16, cm/s/s)
     // byte 20~21: East acceleration of vehicle (int16, cm/s/s)
@@ -588,7 +586,10 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget& angle_target_r
 int16_t AP_Mount_XFRobot::constrain_yaw_target_cd(float yaw_control_rad) const
 {
     const float yaw_control_cd = degrees(yaw_control_rad) * 100;
-    switch (detected_pod_code) {
+    if (!detected_pod_code.has_value()) {
+        return constrain_int16(yaw_control_cd, -180 * 100, 180 * 100);
+    }
+    switch (*detected_pod_code) {
     case PodCode::Z1PRO:
     case PodCode::Z2PRO:
         return constrain_int16(yaw_control_cd, ZPRO_YAW_MIN_CD, ZPRO_YAW_MAX_CD);
@@ -643,6 +644,12 @@ bool AP_Mount_XFRobot::send_simple_command(FunctionOrder order, uint8_t param)
     return true;
 }
 
+uint16_t AP_Mount_XFRobot::get_xfrobot_zoom_centipercent() const {
+    return constrain_float(
+        zoom_target.percent * ZOOM_PROTOCOL_UNITS_PER_PERCENT, ABSOLUTE_ZOOM_PROTOCOL_MIN, ABSOLUTE_ZOOM_PROTOCOL_MAX
+    );
+}
+
 // send the pending absolute zoom target
 bool AP_Mount_XFRobot::send_zoom_pct()
 {
@@ -661,7 +668,7 @@ bool AP_Mount_XFRobot::send_zoom_pct()
     // Bit zero selects camera 1. Positive zoom values use 1~10000 for
     // the minimum through maximum camera zoom range.
     zoom_command.content.camera_mask = CAMERA_1_MASK;
-    zoom_command.content.zoom_pct_100 = htole16(zoom_target.pct_100);
+    zoom_command.content.zoom_centipercent = htole16(get_xfrobot_zoom_centipercent());
 
     const uint16_t crc16 = crc16_ccitt(zoom_command.bytes, sizeof(ZoomCommand) - 2, 0);
     zoom_command.content.crc.crc_high = HIGHBYTE(crc16);
@@ -669,18 +676,19 @@ bool AP_Mount_XFRobot::send_zoom_pct()
 
     _uart->write(zoom_command.bytes, sizeof(ZoomCommand));
 
-    const float predicted_zoom_multiplier = get_predicted_zoom_multiplier(zoom_target.pct);
-    zoom_target.learn_max_zoom = !get_known_max_zoom_multiplier().has_value() &&
-                                 is_positive(zoom_target.pct) &&
-                                 (predicted_zoom_multiplier >= last_rgb_zoom_feedback_multiplier ||
-                                  zoom_target.pct >= 100.0f);
+    const float predicted_zoom_multiplier = get_predicted_zoom_multiplier(zoom_target.percent);
+    zoom_target.learn_max_zoom = !get_known_max_zoom_multiplier().has_value() && is_positive(zoom_target.percent) &&
+        (predicted_zoom_multiplier >= last_rgb_zoom_feedback_multiplier || zoom_target.percent >= 100.0f);
     rgb_zoom_multiplier = predicted_zoom_multiplier;
     return true;
 }
 
-std::optional<float> AP_Mount_XFRobot::get_known_max_zoom_multiplier() const
-{
-    switch (detected_pod_code) {
+std::optional<float> AP_Mount_XFRobot::get_known_max_zoom_multiplier() const {
+    if (!detected_pod_code.has_value()) {
+        return {};
+    }
+
+    switch (*detected_pod_code) {
     case PodCode::Z1PRO:
         return static_cast<float>(MaxZoomMultiplier::Z1PRO);
     case PodCode::Z2PRO:
@@ -690,16 +698,13 @@ std::optional<float> AP_Mount_XFRobot::get_known_max_zoom_multiplier() const
     }
 }
 
-float AP_Mount_XFRobot::get_predicted_zoom_multiplier(float zoom_pct) const
-{
+float AP_Mount_XFRobot::get_predicted_zoom_multiplier(float zoom_pct) const {
     const float max_zoom_multiplier = get_known_max_zoom_multiplier().value_or(predicted_max_rgb_zoom_multiplier);
     return 1.0f + zoom_pct * 0.01f * (max_zoom_multiplier - 1.0f);
 }
 
-void AP_Mount_XFRobot::update_predicted_max_zoom_for_unknown_cameras(float zoom_feedback_multiplier)
-{
-    if (!zoom_target.learn_max_zoom ||
-        get_known_max_zoom_multiplier().has_value()) {
+void AP_Mount_XFRobot::update_predicted_max_zoom_for_unknown_cameras(float zoom_feedback_multiplier) {
+    if (!zoom_target.learn_max_zoom || get_known_max_zoom_multiplier().has_value()) {
         zoom_target.learn_max_zoom = false;
         return;
     }
@@ -712,13 +717,12 @@ void AP_Mount_XFRobot::update_predicted_max_zoom_for_unknown_cameras(float zoom_
         return;
     }
 
-    const float zoom_fraction = zoom_target.pct * 0.01f;
+    const float zoom_fraction = zoom_target.percent * 0.01f;
     const float predicted_max_zoom_multiplier = 1.0f + (zoom_feedback_multiplier - 1.0f) / zoom_fraction;
     predicted_max_rgb_zoom_multiplier = MAX(predicted_max_rgb_zoom_multiplier, predicted_max_zoom_multiplier);
 }
 
-float AP_Mount_XFRobot::image_rate_scale() const
-{
+float AP_Mount_XFRobot::image_rate_scale() const {
     // For optical zoom z, tan(FOVz / 2) = tan(FOV1x / 2) / z.  Scaling
     // by their ratio keeps image-plane motion near the centre constant.
     return 1.0f / rgb_zoom_multiplier;
