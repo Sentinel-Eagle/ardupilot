@@ -166,6 +166,9 @@ private:
     // send the pending absolute zoom target
     bool send_zoom_pct();
 
+    // return the positive centipercent value required by the XFRobot protocol
+    uint16_t get_xfrobot_zoom_centipercent() const;
+
     // return the maximum zoom multiplier for a recognised camera model
     std::optional<float> get_known_max_zoom_multiplier() const;
 
@@ -300,7 +303,7 @@ private:
         struct PACKED {
             SendPacketMainAndSubFrame main;
             uint8_t camera_mask;
-            uint16_t zoom_pct_100;
+            uint16_t zoom_centipercent; // required by XFRobot and must be positive
             PacketCRC crc;
         } content;
         uint8_t bytes[sizeof(content)];
@@ -311,8 +314,7 @@ private:
                   "XFRobot absolute zoom packet must be 75 bytes");
 
     struct {
-        uint16_t pct_100;
-        float pct;
+        float percent;
         bool pending;
         bool learn_max_zoom;
     } zoom_target {};
