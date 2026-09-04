@@ -434,8 +434,10 @@ private:
 #endif
 
 #if AP_MOUNT_POI_LOCK_ENABLED
-    // calculate the Location that the gimbal is pointing at, assuming the target is at home altitude
-    bool calculate_poi_at_home_alt(Location &target_location, bool report_failure = true);
+    // calculate the Location that the gimbal is pointing at on the specified altitude plane
+    bool calculate_poi_at_altitude(const Location &altitude_location,
+                                   Location &target_location,
+                                   bool report_failure = true);
 
     // update a locked POI using live pitch and yaw rate input
     bool update_poi_adjustment();

@@ -301,7 +301,7 @@ void AP_Mount_Backend::update_poi_lock_target()
     Location target_location;
 
     if (!mnt_target.pointing_at_poi_at_home_alt) {
-        if (calculate_poi_at_home_alt(target_location)) {
+        if (calculate_poi_at_altitude(AP::ahrs().get_home(), target_location)) {
             set_roi_target(target_location);
             send_poi_location(target_location);
         }
@@ -399,7 +399,7 @@ bool AP_Mount_Backend::update_poi_adjustment()
         }
 #endif
         if (!have_adjusted_target) {
-            have_adjusted_target = calculate_poi_at_home_alt(adjusted_target, false);
+            have_adjusted_target = calculate_poi_at_altitude(AP::ahrs().get_home(), adjusted_target, false);
         }
         if (have_adjusted_target) {
             _roi_target = adjusted_target;
@@ -408,6 +408,14 @@ bool AP_Mount_Backend::update_poi_adjustment()
 
     if (now_ms - poi_adjustment.last_input_ms < AP_MOUNT_POI_ADJUSTMENT_IDLE_MS) {
         return true;
+    }
+
+    // A terrain POI result may describe an attitude from before the gimbal finished moving.
+    // Project once from the current attitude before location targeting resumes, otherwise a
+    // slow adjustment can snap back to that delayed result.
+    Location final_target;
+    if (calculate_poi_at_altitude(_roi_target, final_target, false)) {
+        _roi_target = final_target;
     }
 
     reset_poi_adjustment();
@@ -912,27 +920,26 @@ void AP_Mount_Backend::calculate_poi()
 #endif // AP_MOUNT_POI_TO_LATLONALT_ENABLED
 
 #if AP_MOUNT_POI_LOCK_ENABLED
-// calculate location gimbal is pointing, at HOME altitude. Used if Terrain is not avaialble
-bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location, bool report_failure)
+// calculate location gimbal is pointing at a specified altitude
+bool AP_Mount_Backend::calculate_poi_at_altitude(const Location &altitude_location,
+                                                 Location &target_location,
+                                                 bool report_failure)
 {
-    AP_AHRS &ahrs = AP::ahrs();
-
     // current location
     Location cur_loc;
     if (!get_vehicle_location(cur_loc)) {
         return false;
     }
 
-    // home location/alt
-    const Location &home = ahrs.get_home();
-    const float cur_alt_m  = cur_loc.alt * 0.01f;   // cm -> m
-    const float home_alt_m = home.alt    * 0.01f;   // cm -> m
+    int32_t cur_alt_cm;
+    int32_t target_alt_cm;
+    if (!cur_loc.get_alt_cm(Location::AltFrame::ABSOLUTE, cur_alt_cm) ||
+        !altitude_location.get_alt_cm(Location::AltFrame::ABSOLUTE, target_alt_cm)) {
+        return false;
+    }
 
-    // Plane at HOME altitude in local NED (origin at vehicle):
-    // down_of_home_plane = cur_alt - home_alt  (NED down positive)
-    // Above home => target_down_m > 0 (home plane is below us)
-    // Below home => target_down_m < 0 (home plane is above us)
-    const float target_down_m = (cur_alt_m - home_alt_m);
+    // Altitude plane in local NED (origin at vehicle), with down positive.
+    const float target_down_m = (cur_alt_cm - target_alt_cm) * 0.01f;
 
     // mount attitude quaternion
     Quaternion quat;
@@ -971,8 +978,8 @@ bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location, bool
     }
     los_ned.normalize();
 
-    // Policy : if below home alt, you can be looking up, but not if above home alt
-    // Require LOS to be at least MIN_DOWN_DEG below the horizon if above home alt.
+    // Policy: if below the target altitude, you can be looking up, but not if above it.
+    // Require LOS to be at least MIN_DOWN_DEG below the horizon if above the target altitude.
     // This eliminates looking-up and near-parallel cases without needing a separate los.z ~= 0 check.
     const float MIN_DOWN_DEG = 1.0f; // tune
     const float min_los_z = sinf(radians(MIN_DOWN_DEG)); // ~= 0.01745
@@ -985,9 +992,8 @@ bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location, bool
         return false;
     }
 
-    // Use real intersection if above home; mirror if below home:
-    // Mirror rule: if we are below home by |target_down|, pretend we are above home by the same amount
-    // for the purpose of selecting a forward point in the home-alt plane.
+    // Use real intersection if above the target altitude; mirror if below it.
+    // Mirror rule: if we are below the plane by |target_down|, pretend we are above it by the same amount.
     const bool used_mirror = (target_down_m < 0.0f);
     const float effective_down_m = used_mirror ? -target_down_m : target_down_m;
     
@@ -1009,10 +1015,10 @@ bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location, bool
         return false;
     }
 
-    // Build target location at intersection point of home alt plane
+    // Build target location at the intersection with the altitude plane.
     target_location = cur_loc;
     target_location.offset(north_m, east_m);
-    target_location.alt = home.alt;
+    target_location.set_alt_cm(target_alt_cm, Location::AltFrame::ABSOLUTE);
     return true;
 }
 #endif // AP_MOUNT_POI_LOCK_ENABLED
