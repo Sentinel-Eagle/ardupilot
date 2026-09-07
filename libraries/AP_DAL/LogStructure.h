@@ -39,7 +39,8 @@
     LOG_REVH_MSG, \
     LOG_RWOH_MSG, \
     LOG_RBOH_MSG, \
-    LOG_RTER_MSG
+    LOG_RTER_MSG, \
+    LOG_RDCM_MSG
 
 // @LoggerMessage: RFRH
 // @Description: Replay FRame Header
@@ -589,6 +590,18 @@ struct log_RTER {
     uint8_t _end;
 };
 
+// @LoggerMessage: RDCM
+// @Description: Replay DCM backup attitude, used by EKF3 as an independent per-lane attitude cross-check
+// @Field: Roll: DCM estimated roll
+// @Field: Pitch: DCM estimated pitch
+// @Field: Valid: true when the DCM attitude estimate is usable
+struct log_RDCM {
+    int16_t roll_cd;
+    int16_t pitch_cd;
+    uint8_t attitude_valid;
+    uint8_t _end;
+};
+
 #define RLOG_SIZE(sname) 3+offsetof(struct log_ ##sname,_end)
 
 #define LOG_STRUCTURE_FROM_DAL        \
@@ -657,4 +670,6 @@ struct log_RTER {
     { LOG_RBOH_MSG, RLOG_SIZE(RBOH),                                   \
       "RBOH", "ffffffffIfffH", "Q,DPX,DPY,DPZ,DAX,DAY,DAZ,DT,TS,OX,OY,OZ,D", "-------------", "-------------" }, \
     { LOG_RTER_MSG, RLOG_SIZE(RTER),                                   \
-      "RTER", "f", "Alt", "m", "0" },
+      "RTER", "f", "Alt", "m", "0" }, \
+    { LOG_RDCM_MSG, RLOG_SIZE(RDCM),                                   \
+      "RDCM", "ccB", "Roll,Pitch,Valid", "dd-", "BB-" },

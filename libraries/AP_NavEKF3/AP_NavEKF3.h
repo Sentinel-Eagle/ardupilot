@@ -569,6 +569,7 @@ private:
     uint8_t coreImuIndex[MAX_EKF_CORES];            // IMU index used by this core, the last one may be shared with other cores when there are fewer IMUs than lanes
     std::optional<uint32_t> coreYawVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the yaw variance gate
     std::optional<uint32_t> corePosVarAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously meeting the pos variance gate
+    std::optional<uint32_t> coreDcmAttAcceptSince_ms[MAX_EKF_CORES]; // when this core last began continuously agreeing with the DCM backup attitude
     
     // update the yaw reset data to capture changes due to a lane switch
     // new_primary - index of the ekf instance that we are about to switch to as the primary

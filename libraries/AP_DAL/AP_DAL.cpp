@@ -22,6 +22,9 @@ AP_DAL *AP_DAL::_singleton = nullptr;
 bool AP_DAL::force_write;
 bool AP_DAL::logging_started;
 
+// How often the DCM attitude cross-check reference is refreshed and logged for replay.
+static constexpr uint32_t RDCM_UPDATE_INTERVAL_MS = 20;
+
 void AP_DAL::start_frame(AP_DAL::FrameType frametype)
 {
 #if !APM_BUILD_TYPE(APM_BUILD_AP_DAL_Standalone) && !APM_BUILD_TYPE(APM_BUILD_Replay)
@@ -81,6 +84,26 @@ void AP_DAL::start_frame(AP_DAL::FrameType frametype)
     _RFRN.wheelencoder_enabled = AP::wheelencoder() && (AP::wheelencoder()->num_sensors() > 0);
     _RFRN.ekf_type = int8_t(ahrs.configured_ekf_type());
     WRITE_REPLAY_BLOCK_IFCHANGED(RFRN, _RFRN, old);
+
+#if AP_AHRS_DCM_ENABLED
+    // Refresh the DCM attitude cross-check reference at a fixed low rate rather than every
+    // frame: it only has to catch divergences that persist for seconds, and refreshing at loop
+    // rate would make this block change (and so be written) on every single frame. Refreshing
+    // the struct on the same schedule as the write keeps live and replayed runs reading the
+    // identical sample sequence.
+    const uint32_t now_ms = uint32_t(_RFRH.time_us / 1000UL);
+    if (now_ms - _last_rdcm_update_ms >= RDCM_UPDATE_INTERVAL_MS) {
+        _last_rdcm_update_ms = now_ms;
+        const log_RDCM old_rdcm = _RDCM;
+        float dcm_roll_rad, dcm_pitch_rad;
+        _RDCM.attitude_valid = ahrs.get_DCM_attitude(dcm_roll_rad, dcm_pitch_rad) ? 1 : 0;
+        if (_RDCM.attitude_valid != 0) {
+            _RDCM.roll_cd = int16_t(degrees(dcm_roll_rad) * 100.0f);
+            _RDCM.pitch_cd = int16_t(degrees(dcm_pitch_rad) * 100.0f);
+        }
+        WRITE_REPLAY_BLOCK_IFCHANGED(RDCM, _RDCM, old_rdcm);
+    }
+#endif
 
     // update body conversion
     _rotation_vehicle_body_to_autopilot_body = ahrs.get_rotation_vehicle_body_to_autopilot_body();
