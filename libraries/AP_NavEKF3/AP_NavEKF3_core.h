@@ -184,6 +184,15 @@ public:
     // return true if the horizontal position innovation test is within the normal acceptance limit
     bool has_acceptable_posxy_variance(void) const;
 
+    // return true if this lane's roll and pitch agree with the DCM backup estimate. Unlike the
+    // variance gates above this is an *external* cross-check, so it catches a lane whose attitude
+    // has diverged while its own covariances still look self-consistent.
+    bool has_acceptable_dcm_attitude_agreement(void) const;
+
+    // Maximum roll or pitch disagreement with the DCM backup above which a lane is considered
+    // ineligible as primary.
+    static constexpr float LANE_DCM_ATTITUDE_MAX_DIFF_DEG = 10.0f;
+
     // P[7][7]+P[8][8]: NE position state variance (m²), used by lane-selection logic
     float get_pos_variance_NE(void) const;
 
