@@ -358,6 +358,9 @@ protected:
     // allows user to disable yaw even on 3-axis gimbal
     bool yaw_range_valid() const { return (_params.yaw_angle_min < _params.yaw_angle_max); }
 
+    // returns true if body-frame yaw rate targets should wrap instead of stop at the configured limits
+    virtual bool yaw_range_is_continuous() const { return false; }
+
     // returns true if mavlink heartbeat should be suppressed for this gimbal (only used by Solo gimbal)
     virtual bool suppress_heartbeat() const { return false; }
 

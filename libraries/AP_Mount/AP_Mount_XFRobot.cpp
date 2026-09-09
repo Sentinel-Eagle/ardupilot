@@ -21,6 +21,8 @@
 
 static constexpr uint8_t SUB_FRAME_REQUEST_CODE = 0x01;
 static constexpr uint8_t CAMERA_1_MASK = 1U << 0;
+static constexpr int16_t ZPRO_YAW_MIN_CD = -140 * 100;
+static constexpr int16_t ZPRO_YAW_MAX_CD = 140 * 100;
 static constexpr float ZOOM_PROTOCOL_UNITS_PER_PERCENT = 100.0f;
 static constexpr float ZOOM_FEEDBACK_UNITS_PER_MULTIPLIER = 10.0f;
 static constexpr uint16_t ABSOLUTE_ZOOM_PROTOCOL_MIN = 1U;
@@ -450,7 +452,12 @@ void AP_Mount_XFRobot::process_packet()
 
     // display hardware and firmware version
     if (!got_firmware_version) {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s hw:%.1f fw:%.1f", send_text_prefix, double(msg_buff.simple_reply.main.hardware_version * 0.1), double(msg_buff.simple_reply.main.firmware_version * 0.1));
+        const uint8_t pod_code = detected_pod_code.has_value() ? static_cast<uint8_t>(detected_pod_code.value()) : 0;
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s pod:%u hw:%.1f fw:%.1f",
+                      send_text_prefix,
+                      pod_code,
+                      double(msg_buff.simple_reply.main.hardware_version * 0.1),
+                      double(msg_buff.simple_reply.main.firmware_version * 0.1));
         got_firmware_version = true;
     }
 
@@ -499,7 +506,7 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget& angle_target_r
     set_attitude_packet.content.main.roll_control = htole16(constrain_int16(degrees(angle_target_rad.roll) * 100, -180 * 100, 180 * 100));
     set_attitude_packet.content.main.pitch_control = htole16(constrain_int16(degrees(angle_target_rad.pitch) * 100, -90 * 100, 90 * 100));
     const float yaw_control_rad = angle_target_rad.get_bf_yaw(carrier.yaw_rad);
-    set_attitude_packet.content.main.yaw_control = htole16(constrain_int16(degrees(yaw_control_rad) * 100, -180 * 100, 180 * 100));
+    set_attitude_packet.content.main.yaw_control = htole16(constrain_yaw_target_cd(yaw_control_rad));
 
     // byte 11: status, Bit0:INS valid, Bit2:control values valid
     const uint8_t status_ins_bit = carrier.ins_valid ? (1 << 0) : 0;
@@ -574,6 +581,21 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget& angle_target_r
 
     // store time of send
     last_send_ms = AP_HAL::millis();
+}
+
+int16_t AP_Mount_XFRobot::constrain_yaw_target_cd(float yaw_control_rad) const
+{
+    const float yaw_control_cd = degrees(yaw_control_rad) * 100;
+    if (!detected_pod_code.has_value()) {
+        return constrain_int16(yaw_control_cd, -180 * 100, 180 * 100);
+    }
+    switch (*detected_pod_code) {
+    case PodCode::Z1PRO:
+    case PodCode::Z2PRO:
+        return constrain_int16(yaw_control_cd, ZPRO_YAW_MIN_CD, ZPRO_YAW_MAX_CD);
+    default:
+        return constrain_int16(yaw_control_cd, -180 * 100, 180 * 100);
+    }
 }
 
 // send simple (1byte) command to gimbal (e.g. take pic, start recording)

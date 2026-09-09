@@ -1229,8 +1229,8 @@ void AP_Mount_Backend::update_angle_target_from_rate(const MountRateTarget& rate
 
     // update yaw angle target
     angle_rad.yaw = angle_rad.yaw + rate_rad.yaw * AP_MOUNT_UPDATE_DT;
-    if (angle_rad.yaw_is_ef) {
-        // if earth-frame yaw wraps between += 180 degrees
+    if (angle_rad.yaw_is_ef || yaw_range_is_continuous()) {
+        // earth-frame and continuous yaw wrap between += 180 degrees
         angle_rad.yaw = wrap_PI(angle_rad.yaw);
     } else {
         // if body-frame constrain yaw to body-frame limits

@@ -156,8 +156,18 @@ private:
         return NATIVE_ANGLES_ONLY;
     };
 
+    // Continuous yaw requires explicit opt-in and a full configured yaw circle.
+    bool yaw_range_is_continuous() const override {
+        return _params.yaw_continuous != 0 &&
+               _params.yaw_angle_min == -180 &&
+               _params.yaw_angle_max == 180;
+    }
+
     // send_target_angles
     void send_target_angles(const MountAngleTarget& angle_target_rad) override;
+
+    // convert and constrain the yaw target for the detected gimbal model
+    int16_t constrain_yaw_target_cd(float yaw_control_rad) const;
 
     // send simple (1byte) command to gimbal (e.g. take pic, start recording)
     // returns true on success, false on failure to send
