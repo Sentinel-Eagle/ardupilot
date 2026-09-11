@@ -781,6 +781,15 @@ bool NavEKF3_core::has_acceptable_posxy_variance(void) const
     if (PV_AidingMode == AID_NONE) {
         return true;
     }
+#if EK3_FEATURE_EXTERNAL_NAV
+    // A position-only ext-nav lane that keeps rejecting fresh fixes is wrong or fed by a broken sensor, either way
+    // it must not be selected. lastGpsPosPassTime_ms is refreshed by every accepted position fix and by a position
+    // reset, whatever the source. See EXTNAV_POS_REJECT_INELIGIBLE_MS.
+    if (posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV && extNavPosRecent() &&
+        imuSampleTime_ms - lastGpsPosPassTime_ms > EXTNAV_POS_REJECT_INELIGIBLE_MS) {
+        return false;
+    }
+#endif
     return get_pos_variance_NE() < lane_pos_var_threshold();
 }
 
