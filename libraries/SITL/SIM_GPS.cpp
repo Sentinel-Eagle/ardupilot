@@ -358,7 +358,7 @@ void GPS::simulate_spoofing(struct GPS_Data &d)
     const float pos_noise_m = 0.5;
     const float speed_noise = 0.1;
 
-    auto &spoof = spoofing[instance];
+    auto &spoof = spoofing_sim_state[instance];
     const uint32_t now_ms = AP_HAL::millis();
 
     if (spoof.num_sats == 0 ||
