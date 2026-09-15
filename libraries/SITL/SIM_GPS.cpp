@@ -154,6 +154,13 @@ const AP_Param::GroupInfo SIM::GPSParms::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("OPTIONS",  18, GPSParms, options, 0),
 
+    // @Param: SPOOF
+    // @DisplayName: GPS spoofing enable
+    // @Description: Enable simulated GPS spoofing: a steady 3D fix with a healthy satellite count and healthy accuracy figures, reporting a fixed decoy position far from the vehicle and a constant ground speed
+    // @User: Advanced
+    // @Values: 0:Disabled, 1:Enabled when armed, 2:Enabled always
+    AP_GROUPINFO("SPOOF",    19, GPSParms, spoof, 0),
+
     AP_GROUPEND
 };
 }
@@ -331,6 +338,49 @@ void GPS::simulate_jamming(struct GPS_Data &d)
 
     d.latitude = constrain_float(jam.latitude, -90, 90);
     d.longitude = constrain_float(jam.longitude, -180, 180);
+}
+
+/*
+  simulation of a "perfect" GPS spoof. The receiver holds a steady 3D fix
+  with a healthy satellite count and healthy accuracy figures while
+  reporting a position on the other side of the world and a constant ground speed 56 m/s.
+ */
+void GPS::simulate_spoofing(struct GPS_Data &d)
+{
+    const double decoy_latitude = -12.04;
+    const double decoy_longitude = -77.05;
+    const float decoy_altitude = 50;
+    const float decoy_speed = 56.0;
+    const float decoy_course_deg = 0;
+    const uint8_t sats_min = 15;
+    const uint8_t sats_max = 28;
+    const float sats_change_hz = 0.1;
+    const float pos_noise_m = 0.5;
+    const float speed_noise = 0.1;
+
+    auto &spoof = spoofing[instance];
+    const uint32_t now_ms = AP_HAL::millis();
+
+    if (spoof.num_sats == 0 ||
+        (now_ms - spoof.last_sats_change_ms)*0.001 > 1.0/sats_change_hz) {
+        spoof.last_sats_change_ms = now_ms;
+        spoof.num_sats = sats_min + (get_random16() % (sats_max - sats_min + 1));
+    }
+
+    d.num_sats = spoof.num_sats;
+    d.have_lock = true;
+
+    d.latitude = decoy_latitude + rand_float()*pos_noise_m * LATLON_TO_M_INV * 1e-7;
+    d.longitude = decoy_longitude + rand_float()*pos_noise_m * LATLON_TO_M_INV * 1e-7;
+    d.altitude = decoy_altitude;
+
+    d.speedN = decoy_speed * cosf(radians(decoy_course_deg)) + rand_float()*speed_noise;
+    d.speedE = decoy_speed * sinf(radians(decoy_course_deg)) + rand_float()*speed_noise;
+    d.speedD = rand_float()*speed_noise;
+
+    d.horizontal_acc = 0.5;
+    d.vertical_acc = 0.8;
+    d.speed_acc = 0.2;
 }
 
 /*
@@ -562,6 +612,13 @@ void GPS::update()
 
     if (params.jam == 1) {
         simulate_jamming(d);
+    }
+
+    const Spoof spoof_mode = Spoof(params.spoof.get());
+    if (params.enabled &&
+        (spoof_mode == Spoof::ALWAYS ||
+         (spoof_mode == Spoof::WHEN_ARMED && hal.util->get_soft_armed()))) {
+        simulate_spoofing(d);
     }
 
     backend->publish(&d);
