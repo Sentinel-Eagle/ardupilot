@@ -357,6 +357,9 @@ void GPS::simulate_spoofing(struct GPS_Data &d)
     const float sats_change_hz = 0.1;
     const float pos_noise_m = 0.5;
     const float speed_noise = 0.1;
+    const float horizontal_acc = 0.5;
+    const float vertical_acc = 0.8;
+    const float speed_acc = 0.2;
 
     auto &spoof = spoofing_sim_state[instance];
     const uint32_t now_ms = AP_HAL::millis();
@@ -378,9 +381,9 @@ void GPS::simulate_spoofing(struct GPS_Data &d)
     d.speedE = decoy_speed * sinf(radians(decoy_course_deg)) + rand_float()*speed_noise;
     d.speedD = rand_float()*speed_noise;
 
-    d.horizontal_acc = 0.5;
-    d.vertical_acc = 0.8;
-    d.speed_acc = 0.2;
+    d.horizontal_acc = horizontal_acc;
+    d.vertical_acc = vertical_acc;
+    d.speed_acc = speed_acc;
 }
 
 /*

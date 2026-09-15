@@ -171,11 +171,10 @@ private:
         double longitude;
     } jamming[2];
 
-    // state of spoofing simulation
     struct {
         uint32_t last_sats_change_ms;
         uint8_t num_sats;
-    } spoofing[AP_SIM_MAX_GPS_SENSORS];
+    } spoofing_sim_state[AP_SIM_MAX_GPS_SENSORS];
 
     bool _gps_has_basestation_position;
     GPS_Data _gps_basestation_data;
