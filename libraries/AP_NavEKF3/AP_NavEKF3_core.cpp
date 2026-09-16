@@ -2053,7 +2053,14 @@ void NavEKF3_core::ConstrainVariances()
     // +----------------------------------------------------------------------------------------------+
 
     for (uint8_t i=0; i<=3; i++) P[i][i] = constrain_ftype(P[i][i],0.0,1.0); // attitude error
-    for (uint8_t i=4; i<=5; i++) P[i][i] = constrain_ftype(P[i][i], VEL_STATE_MIN_VARIANCE, 1.0e3); // NE velocity
+    // NE velocity. A lane aided only by ext-nav position gets a much higher floor, see EXTNAV_POS_ONLY_VEL_MIN_VARIANCE.
+    ftype velMinVariance = VEL_STATE_MIN_VARIANCE;
+#if EK3_FEATURE_EXTERNAL_NAV
+    if (posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV && !uses_velxy_source(AP_NavEKF_Source::SourceXY::EXTNAV)) {
+        velMinVariance = EXTNAV_POS_ONLY_VEL_MIN_VARIANCE;
+    }
+#endif
+    for (uint8_t i=4; i<=5; i++) P[i][i] = constrain_ftype(P[i][i], velMinVariance, 1.0e3);
 
     // if vibration affected use sensor observation variances to set a floor on the state variances
     if (badIMUdata) {

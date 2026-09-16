@@ -905,6 +905,8 @@ void NavEKF3_core::FuseVelPosNED()
                         fusePosData = false;
                     } else
                     {
+                    // ResetPosition() clears posTimeout, so remember why we are here before calling it.
+                    const bool resetOnTimeout = posTimeout;
                     // reset the position to the current external sensor position
                     ResetPosition(resetDataSource::DEFAULT);
 
@@ -933,7 +935,7 @@ void NavEKF3_core::FuseVelPosNED()
 
 #if EK3_FEATURE_EXTERNAL_NAV
                     if (posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV) {
-                        const char *reason = posTimeout ? "position timeout" : "position drift large";
+                        const char *reason = resetOnTimeout ? "position timeout" : "position drift large";
                         if (!extNavRepositionMessageSentThisCycle) {
                             GCS_SEND_TEXT(
                                 MAV_SEVERITY_WARNING,
