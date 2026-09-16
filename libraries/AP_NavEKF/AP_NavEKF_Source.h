@@ -57,6 +57,10 @@ public:
         TERTIARY = 2,
     };
 
+    // Label naming what a lane is, from its EK3_SRCn_POSXY setting, e.g. "EXTNAV". A lane with
+    // no horizontal position source dead reckons on its IMU, so it is labelled "IMU".
+    static const char *posxy_lane_label(SourceXY posxy_source);
+
     // initialisation
     void init();
 

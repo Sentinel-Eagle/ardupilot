@@ -394,7 +394,7 @@ void NavEKF3_core::setAidingMode()
         switch (PV_AidingMode) {
         case AID_NONE:
             // We have ceased aiding
-            GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "EKF3 lane%u IMU%u stopped aiding",(unsigned)core_index,(unsigned)imu_index);
+            GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "lane %u/%s: stopped aiding",(unsigned)core_index,lane_label());
             // When not aiding, estimate orientation & height fusing synthetic constant position and zero velocity measurement to constrain tilt errors
             posTimeout = true;
             velTimeout = true;
@@ -419,7 +419,7 @@ void NavEKF3_core::setAidingMode()
 
         case AID_RELATIVE:
             // We are doing relative position navigation where velocity errors are constrained, but position drift will occur
-            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u IMU%u started relative aiding",(unsigned)core_index,(unsigned)imu_index);
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: started relative aiding",(unsigned)core_index,lane_label());
 #if EK3_FEATURE_OPTFLOW_FUSION
             if (readyToUseOptFlow()) {
                 // Reset time stamps
@@ -441,24 +441,24 @@ void NavEKF3_core::setAidingMode()
                 // We are commencing aiding using GPS - this is the preferred method
                 posResetSource = resetDataSource::GPS;
                 velResetSource = resetDataSource::GPS;
-                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u IMU%u is using GPS",(unsigned)core_index,(unsigned)imu_index);
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: is using GPS",(unsigned)core_index,lane_label());
 #if EK3_FEATURE_BEACON_FUSION
             } else if (readyToUseRangeBeacon()) {
                 // We are commencing aiding using range beacons
                 posResetSource = resetDataSource::RNGBCN;
-                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u IMU%u is using range beacons",(unsigned)core_index,(unsigned)imu_index);
-                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u IMU%u initial pos NE = %3.1f,%3.1f (m)",(unsigned)core_index,(unsigned)imu_index,(double)rngBcn.receiverPos.x,(double)rngBcn.receiverPos.y);
-                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u IMU%u initial beacon pos D offset = %3.1f (m)",(unsigned)core_index,(unsigned)imu_index,(double)rngBcn.posOffsetNED.z);
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: is using range beacons",(unsigned)core_index,lane_label());
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: pos NE %3.1f,%3.1f m",(unsigned)core_index,lane_label(),(double)rngBcn.receiverPos.x,(double)rngBcn.receiverPos.y);
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: pos D offset %3.1f m",(unsigned)core_index,lane_label(),(double)rngBcn.posOffsetNED.z);
 #endif  // EK3_FEATURE_BEACON_FUSION
 #if EK3_FEATURE_EXTERNAL_NAV
             } else if (readyToUseExtNav()) {
                 // we are commencing aiding using external nav
                 posResetSource = resetDataSource::EXTNAV;
-                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u IMU%u is using external nav data",(unsigned)core_index,(unsigned)imu_index);
-                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u IMU%u initial pos NED = %3.1f,%3.1f,%3.1f (m)",(unsigned)core_index,(unsigned)imu_index,(double)extNavDataDelayed.pos.x,(double)extNavDataDelayed.pos.y,(double)extNavDataDelayed.pos.z);
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: is using external nav data",(unsigned)core_index,lane_label());
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: pos %3.1f,%3.1f,%3.1f m",(unsigned)core_index,lane_label(),(double)extNavDataDelayed.pos.x,(double)extNavDataDelayed.pos.y,(double)extNavDataDelayed.pos.z);
                 if (useExtNavVel) {
                     velResetSource = resetDataSource::EXTNAV;
-                    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u IMU%u initial vel NED = %3.1f,%3.1f,%3.1f (m/s)",(unsigned)core_index,(unsigned)imu_index,(double)extNavVelDelayed.vel.x,(double)extNavVelDelayed.vel.y,(double)extNavVelDelayed.vel.z);
+                    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: vel %3.1f,%3.1f,%3.1f",(unsigned)core_index,lane_label(),(double)extNavVelDelayed.vel.x,(double)extNavVelDelayed.vel.y,(double)extNavVelDelayed.vel.z);
                 }
                 // handle height reset as special case
                 if (frontend->sources.getPosZSource(core_index) == AP_NavEKF_Source::SourceZ::EXTNAV) {
@@ -499,7 +499,7 @@ void NavEKF3_core::checkAttitudeAlignmentStatus()
     if (!tiltAlignComplete) {
         if (tiltErrorVariance < sq(radians(5.0))) {
             tiltAlignComplete = true;
-            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u IMU%u tilt alignment complete",(unsigned)core_index,(unsigned)imu_index);
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: tilt alignment complete",(unsigned)core_index,lane_label());
         }
     }
 
@@ -826,7 +826,7 @@ float NavEKF3_core::lane_pos_var_threshold(void) const
 bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_msg_len) const
 {
     const auto __fail = [&](const char *field_name) -> bool {
-        dal.snprintf(failure_msg, failure_msg_len, "EKF3 core %d %s not ready", (int)core_index, field_name);
+        dal.snprintf(failure_msg, failure_msg_len, "lane %u/%s: %s not ready", (unsigned)core_index, lane_label(), field_name);
         return false;
     };
     const auto __gps_recent_for_prearm = [&]() -> bool {
@@ -857,27 +857,28 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
     // argument if a source that can be ready without yaw alignment is added.
     const auto __fail_gps_source = [&](const char *field_name, const bool require_vz) -> bool {
         const bool bias_ok = delAngBiasLearned || assume_zero_sideslip();
-        const char *reason = "gps unavailable";
+        const char *reason = "unavailable";
         if (!validOrigin) {
-            reason = "gps no origin";
+            reason = "no origin";
         } else if (!tiltAlignComplete) {
             reason = "tilt unaligned";
         } else if (!yawAlignComplete) {
             reason = "yaw unaligned";
         } else if (!bias_ok) {
-            reason = "gps bias learning";
+            reason = "bias learning";
         } else if (!gpsGoodToAlign) {
-            reason = "gps quality low";
+            reason = "quality low";
         } else if (!__gps_recent_for_prearm()) {
-            reason = "gps stale";
+            reason = "stale";
         } else if (require_vz && !gpsDataNew.have_vz) {
-            reason = "gps vertical velocity unavailable";
+            reason = "no vert vel";
         }
         dal.snprintf(
             failure_msg,
             failure_msg_len,
-            "EKF3 core %d %s GPS: %s",
-            (int)core_index,
+            "lane %u/%s: %s GPS %s",
+            (unsigned)core_index,
+            lane_label(),
             field_name,
             reason);
         return false;
@@ -886,8 +887,9 @@ bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_m
         dal.snprintf(
             failure_msg,
             failure_msg_len,
-            "EKF3 core %d POSXY EXTNAV: %s",
-            (int)core_index,
+            "lane %u/%s: POSXY %s",
+            (unsigned)core_index,
+            lane_label(),
             tiltAlignComplete ? "stale" : "tilt unaligned");
         return false;
     };
@@ -1142,7 +1144,7 @@ bool NavEKF3_core::setOrigin(const Location &loc)
         setEarthFieldFromLocation(EKF_origin);
     }
 
-    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u IMU%u origin set",(unsigned)core_index,(unsigned)imu_index);
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: origin set",(unsigned)core_index,lane_label());
 
     return true;
 }
