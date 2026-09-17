@@ -431,19 +431,29 @@ private:
 #if AP_MOUNT_POI_TO_LATLONALT_ENABLED
     // calculate the Location that the gimbal is pointing at
     void calculate_poi();
-
-    // copy the latest POI calculation and its timestamp
-    bool get_poi_result(Quaternion &quat, Location &loc, Location &poi_loc, uint32_t &update_ms);
 #endif
 
 #if AP_MOUNT_POI_LOCK_ENABLED
-    // calculate the Location that the gimbal is pointing at on the specified altitude plane
-    bool calculate_poi_at_altitude(const Location &altitude_location,
-                                   Location &target_location,
-                                   bool report_failure = true);
+    // outcome of intersecting a line-of-sight with a horizontal plane
+    enum class PoiProjection : uint8_t {
+        OK,             // target_location holds the intersection
+        NO_ALTITUDE,    // the altitude of the line-of-sight origin is unavailable
+        TOO_ELEVATED,   // the line-of-sight does not reach the plane ahead of the vehicle
+        TOO_FAR,        // the intersection lies beyond the distance limit
+    };
 
-    // update a locked POI using live pitch and yaw rate input
-    bool update_poi_adjustment();
+    // intersect the line-of-sight leaving from_loc with the horizontal plane at plane_alt_cm (AMSL)
+    PoiProjection project_los_to_altitude(const Location &from_loc,
+                                          int32_t plane_alt_cm,
+                                          float pitch_rad,
+                                          float yaw_ef_rad,
+                                          Location &target_location) const;
+
+    // calculate the Location that the gimbal is pointing at on the specified altitude plane
+    bool calculate_poi_at_altitude(const Location &altitude_location, Location &target_location);
+
+    // move a locked POI across the ground using pilot pitch and yaw input
+    void update_poi_adjustment();
     void reset_poi_adjustment();
     void send_poi_location(const Location &target_location) const;
 #endif
@@ -469,12 +479,10 @@ private:
     void update_poi_lock_target();
 
     struct {
-        bool active;
-        uint32_t last_input_ms;
-        uint32_t last_projection_ms;
-#if AP_MOUNT_POI_TO_LATLONALT_ENABLED
-        uint32_t last_result_ms;
-#endif
+        bool active;            // true while the pilot is moving the POI
+        uint32_t last_input_ms; // system time of the last non-zero pitch or yaw input
+        uint32_t last_warn_ms;  // system time of the last "adjustment limited" warning
+        int32_t plane_alt_cm;   // AMSL altitude of the plane the POI is kept on for this adjustment
     } poi_adjustment {};
 
     // mount mode saved here entering poi lock for 
