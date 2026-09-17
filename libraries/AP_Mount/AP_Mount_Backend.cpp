@@ -391,7 +391,9 @@ void AP_Mount_Backend::update_poi_adjustment()
     Location cur_loc;
     MountAngleTarget angle_rad;
     if (input_active && get_vehicle_location(cur_loc) && get_angle_target_to_roi(angle_rad)) {
-        const float rate_rads = radians(_params.rc_rate_max > 0 ? _params.rc_rate_max.get() : AP_MOUNT_POI_ADJUSTMENT_RATE_DEGS);
+        // scaled by zoom for the same reason pilot rate input is: the pilot is aiming by what the
+        // image does, and a narrow field of view turns a small angular step into a large one there
+        const float rate_rads = radians(_params.rc_rate_max > 0 ? _params.rc_rate_max.get() : AP_MOUNT_POI_ADJUSTMENT_RATE_DEGS) * get_rc_rate_scale();
         const float pitch_rad = constrain_float(angle_rad.pitch + pitch_in * rate_rads * AP_MOUNT_UPDATE_DT,
                                                 radians(_params.pitch_angle_min.get()),
                                                 radians(_params.pitch_angle_max.get()));

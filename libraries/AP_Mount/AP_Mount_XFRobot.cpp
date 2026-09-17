@@ -163,9 +163,9 @@ void AP_Mount_XFRobot::update()
 
     // XFRobot only accepts angle targets, so rate targets are integrated here
     // after compensating pitch and yaw for the camera's current field of view.
-    if (mnt_target.target_type == MountTargetType::RATE and rgb_camera_primary) {
+    if (mnt_target.target_type == MountTargetType::RATE) {
         MountRateTarget scaled_rate_rads = mnt_target.rate_rads;
-        const float rate_scale = image_rate_scale();
+        const float rate_scale = get_rc_rate_scale();
         scaled_rate_rads.pitch *= rate_scale;
         scaled_rate_rads.yaw *= rate_scale;
         update_angle_target_from_rate(scaled_rate_rads, mnt_target.angle_rad);
@@ -722,7 +722,11 @@ void AP_Mount_XFRobot::update_predicted_max_zoom_for_unknown_cameras(float zoom_
     predicted_max_rgb_zoom_multiplier = MAX(predicted_max_rgb_zoom_multiplier, predicted_max_zoom_multiplier);
 }
 
-float AP_Mount_XFRobot::image_rate_scale() const {
+float AP_Mount_XFRobot::get_rc_rate_scale() const {
+    if (!rgb_camera_primary) {
+        // the thermal camera's field of view does not follow the RGB zoom
+        return 1.0f;
+    }
     // For optical zoom z, tan(FOVz / 2) = tan(FOV1x / 2) / z.  Scaling
     // by their ratio keeps image-plane motion near the centre constant.
     return 1.0f / rgb_zoom_multiplier;

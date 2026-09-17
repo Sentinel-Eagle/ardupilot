@@ -283,6 +283,10 @@ protected:
     // FIXME: make this pure-virtual
     virtual uint8_t natively_supported_mount_target_types() const { return 0; };
 
+    // scale applied to pilot rate input so that motion seen in the image stays constant as the
+    // camera's field of view narrows.  1.0 means the backend offers no zoom compensation.
+    virtual float get_rc_rate_scale() const { return 1.0f; }
+
     // some static const masks to try to make the backends easier to read:
     static constexpr uint8_t NATIVE_ANGLES_ONLY = (1U << uint8_t(MountTargetType::ANGLE));
     static constexpr uint8_t NATIVE_RATES_ONLY = (1U << uint8_t(MountTargetType::RATE));

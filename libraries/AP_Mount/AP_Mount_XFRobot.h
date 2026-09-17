@@ -189,7 +189,7 @@ private:
     void update_predicted_max_zoom_for_unknown_cameras(float zoom_feedback_multiplier);
 
     // scale angular motion so image motion remains constant as the FOV narrows
-    float image_rate_scale() const;
+    float get_rc_rate_scale() const override;
 
     // check for recording timeout
     void check_recording_timeout();
