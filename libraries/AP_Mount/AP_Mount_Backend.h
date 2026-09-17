@@ -283,6 +283,10 @@ protected:
     // FIXME: make this pure-virtual
     virtual uint8_t natively_supported_mount_target_types() const { return 0; };
 
+    // scale applied to pilot rate input so that motion seen in the image stays constant as the
+    // camera's field of view narrows.  1.0 means the backend offers no zoom compensation.
+    virtual float get_rc_rate_scale() const { return 1.0f; }
+
     // some static const masks to try to make the backends easier to read:
     static constexpr uint8_t NATIVE_ANGLES_ONLY = (1U << uint8_t(MountTargetType::ANGLE));
     static constexpr uint8_t NATIVE_RATES_ONLY = (1U << uint8_t(MountTargetType::RATE));
@@ -431,8 +435,28 @@ private:
 #endif
 
 #if AP_MOUNT_POI_LOCK_ENABLED
-    // calculate the Location that the gimbal is pointing at, assuming the target is at home altitude
-    bool calculate_poi_at_home_alt(Location &target_location);
+    // outcome of intersecting a line-of-sight with a horizontal plane
+    enum class PoiProjection : uint8_t {
+        OK,             // target_location holds the intersection
+        NO_ALTITUDE,    // the altitude of the line-of-sight origin is unavailable
+        TOO_ELEVATED,   // the line-of-sight does not reach the plane ahead of the vehicle
+        TOO_FAR,        // the intersection lies beyond the distance limit
+    };
+
+    // intersect the line-of-sight leaving from_loc with the horizontal plane at plane_alt_cm (AMSL)
+    PoiProjection project_los_to_altitude(const Location &from_loc,
+                                          int32_t plane_alt_cm,
+                                          float pitch_rad,
+                                          float yaw_ef_rad,
+                                          Location &target_location) const;
+
+    // calculate the Location that the gimbal is pointing at on the specified altitude plane
+    bool calculate_poi_at_altitude(const Location &altitude_location, Location &target_location);
+
+    // move a locked POI across the ground using pilot pitch and yaw input
+    void update_poi_adjustment();
+    void reset_poi_adjustment();
+    void send_poi_location(const Location &target_location) const;
 #endif
 
     bool _yaw_lock = false;         // yaw_lock used in RC_TARGETING mode. True if the gimbal's yaw target is maintained in earth-frame, if false (aka "follow") it is maintained in body-frame
@@ -454,6 +478,13 @@ private:
 
 #if AP_MOUNT_POI_LOCK_ENABLED
     void update_poi_lock_target();
+
+    struct {
+        bool active;            // true while the pilot is moving the POI
+        uint32_t last_input_ms; // system time of the last non-zero pitch or yaw input
+        uint32_t last_warn_ms;  // system time of the last "adjustment limited" warning
+        int32_t plane_alt_cm;   // AMSL altitude of the plane the POI is kept on for this adjustment
+    } poi_adjustment {};
 
     // mount mode saved here entering poi lock for 
     // switching poi lock back to previous mode with aux function middle position
