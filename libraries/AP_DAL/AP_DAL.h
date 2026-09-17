@@ -233,6 +233,19 @@ public:
         return _RFRN.wheelencoder_enabled;
     }
 
+    // Roll/pitch from the DCM backup, recorded so that a replayed EKF sees the same
+    // reference the live one did. Only consumer is
+    // NavEKF3_core::has_acceptable_dcm_attitude_agreement(), which uses it purely as a
+    // lane-health cross-check -- this must never become an input to fusion.
+    bool get_dcm_attitude(float &roll_rad, float &pitch_rad) const {
+        if (_RDCM.attitude_valid == 0) {
+            return false;
+        }
+        roll_rad = radians(_RDCM.roll_cd * 0.01f);
+        pitch_rad = radians(_RDCM.pitch_cd * 0.01f);
+        return true;
+    }
+
     // log optical flow data
     void writeOptFlowMeas(const uint8_t rawFlowQuality, const Vector2f &rawFlowRates, const Vector2f &rawGyroRates, const uint32_t msecFlowMeas, const Vector3f &posOffset, float heightOverride);
 
@@ -261,6 +274,9 @@ public:
             msg.alt,
             Location::AltFrame::ABSOLUTE
         };
+    }
+    void handle_message(const log_RDCM &msg) {
+        _RDCM = msg;
     }
     void handle_message(const log_RFRF &msg, NavEKF2 &ekf2, NavEKF3 &ekf3);
 
@@ -374,6 +390,8 @@ private:
     struct log_RFRH _RFRH;
     struct log_RFRF _RFRF;
     struct log_RFRN _RFRN;
+    struct log_RDCM _RDCM;
+    uint32_t _last_rdcm_update_ms;
 
     // push-based sensor structures
     struct log_ROFH _ROFH;

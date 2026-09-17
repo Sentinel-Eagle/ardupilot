@@ -784,6 +784,27 @@ bool NavEKF3_core::has_acceptable_posxy_variance(void) const
     return get_pos_variance_NE() < lane_pos_var_threshold();
 }
 
+// The DCM backup is an independent estimator running off the same IMUs, so a large steady
+// disagreement with it means this lane's attitude has genuinely drifted rather than that the
+// vehicle moved. Uses getEulerAngles() so both sides of the comparison are in the same trimmed
+// convention that XKF1 and AHR2 record.
+bool NavEKF3_core::has_acceptable_dcm_attitude_agreement(void) const
+{
+    float dcm_roll_rad, dcm_pitch_rad;
+    if (!dal.get_dcm_attitude(dcm_roll_rad, dcm_pitch_rad)) {
+        // no DCM reference available (DCM compiled out, or replaying a log recorded before
+        // RDCM existed) - nothing to judge against, so don't block the lane
+        return true;
+    }
+
+    Vector3f euler;
+    getEulerAngles(euler);
+
+    const float max_diff_rad = radians(LANE_DCM_ATTITUDE_MAX_DIFF_DEG);
+    return fabsf(wrap_PI(euler.x - dcm_roll_rad)) < max_diff_rad &&
+           fabsf(wrap_PI(euler.y - dcm_pitch_rad)) < max_diff_rad;
+}
+
 float NavEKF3_core::get_pos_variance_NE(void) const
 {
     return P[7][7] + P[8][8];
