@@ -17,6 +17,11 @@
 // A lane must continuously pass its variance gates for at least this many milliseconds before automatic selection.
 static constexpr uint32_t PRIMARY_LANE_VARIANCE_STABILITY_TIME_MS = 5000;
 
+// We print a warning whenever any lane misbehaves, even if it is not the selected primary lane.
+// Some lane-switching condition checks are not time based, and to avoid printing a warning every
+// iteration, we just throttle warning messages. The throttle is applied per (lane, reason) pairs.
+static constexpr uint32_t LANE_WARNING_INTERVAL_MS = 5000;
+
 enum class LaneBlockReason : uint8_t {
     RECOVERED = 0,
     UNHEALTHY = 1,
@@ -26,6 +31,8 @@ enum class LaneBlockReason : uint8_t {
     YAW_VARIANCE_HIGH = 5,
     LOST_POS_AIDING = 6,
     POS_VARIANCE_HIGH = 7,
+    DCM_ATTITUDE_MISMATCH = 8,
+    NUM_REASONS,  // must remain last; sizes the per-reason warning timers
 };
 
 static LaneBlockReason lane_block_reason_id(const NavEKF3_core &candidate);
@@ -58,6 +65,12 @@ static LaneBlockReason lane_block_reason_id(const NavEKF3_core &candidate)
     if (!candidate.has_acceptable_posxy_variance()) {
         return LaneBlockReason::POS_VARIANCE_HIGH;
     }
+    // checked last so the more specific reasons above win the reported message: during startup a
+    // lane that has not aligned yet also disagrees with DCM, and "tilt unaligned" is the useful
+    // thing to say about it
+    if (!candidate.has_acceptable_dcm_attitude_agreement()) {
+        return LaneBlockReason::DCM_ATTITUDE_MISMATCH;
+    }
     return LaneBlockReason::RECOVERED;
 }
 
@@ -78,7 +91,10 @@ static const char *lane_block_reason(const NavEKF3_core &candidate)
         return NavEKF3_core::posxy_aiding_failure_reason_string(candidate.posxy_aiding_failure_reason());
     case LaneBlockReason::POS_VARIANCE_HIGH:
         return "pos variance high";
+    case LaneBlockReason::DCM_ATTITUDE_MISMATCH:
+        return "attitude vs DCM";
     case LaneBlockReason::RECOVERED:
+    case LaneBlockReason::NUM_REASONS:
         return "recovered";
     }
     return "recovered";
@@ -100,6 +116,27 @@ static void send_lane_switch_reason(
         (unsigned)old_primary,
         (unsigned)new_primary,
         reason);
+}
+
+/*
+  Records the emission time when it returns true, so only call when about to emit. On false the
+  caller must leave its "last reported" state untouched, or the condition is never reported.
+*/
+static bool lane_warning_allowed(uint8_t lane, LaneBlockReason reason)
+{
+    // We keep when each lane last warned about each reason, so repeats can be spaced without
+    // delaying a warning about a different reason.
+    static uint32_t last_lane_warning_ms[MAX_EKF_CORES][uint8_t(LaneBlockReason::NUM_REASONS)];
+    if (lane >= MAX_EKF_CORES) {
+        return true;
+    }
+    const uint32_t now_ms = AP::dal().millis();
+    uint32_t &last_ms = last_lane_warning_ms[lane][uint8_t(reason)];
+    if (last_ms != 0 && now_ms - last_ms < LANE_WARNING_INTERVAL_MS) {
+        return false;
+    }
+    last_ms = now_ms;
+    return true;
 }
 
 std::optional<uint8_t> NavEKF3::requested_forced_primary_core(void) const
@@ -125,16 +162,20 @@ uint8_t NavEKF3::desired_primary_core(void) const
     for (uint8_t core_index = 0; core_index < num_cores; core_index++) {
         const auto &yaw_stable_since_ms = coreYawVarAcceptSince_ms[core_index];
         const auto &pos_stable_since_ms = corePosVarAcceptSince_ms[core_index];
+        const auto &dcm_att_stable_since_ms = coreDcmAttAcceptSince_ms[core_index];
         const bool has_stable_yaw_variance =
             yaw_stable_since_ms.has_value() && now_ms - *yaw_stable_since_ms >= PRIMARY_LANE_VARIANCE_STABILITY_TIME_MS;
         const bool has_stable_posxy_variance =
             pos_stable_since_ms.has_value() && now_ms - *pos_stable_since_ms >= PRIMARY_LANE_VARIANCE_STABILITY_TIME_MS;
+        const bool has_stable_dcm_attitude =
+            dcm_att_stable_since_ms.has_value() && now_ms - *dcm_att_stable_since_ms >= PRIMARY_LANE_VARIANCE_STABILITY_TIME_MS;
         // Source sets are preference ordered, so the lowest eligible lane always
         // wins. A lane other than the current primary must also hold acceptable
         // variances for the full stability window before it can be selected,
         // which damps switching on sources that flap.
         if (core_is_primary_eligible(core[core_index]) &&
-            (core_index == primary || (has_stable_yaw_variance && has_stable_posxy_variance))) {
+            (core_index == primary ||
+             (has_stable_yaw_variance && has_stable_posxy_variance && has_stable_dcm_attitude))) {
             return core_index;
         }
     }
@@ -1096,6 +1137,14 @@ void NavEKF3::UpdateFilter(void)
             corePosVarAcceptSince_ms[i].reset();
         }
 
+        if (core[i].has_acceptable_dcm_attitude_agreement()) {
+            if (!coreDcmAttAcceptSince_ms[i].has_value()) {
+                coreDcmAttAcceptSince_ms[i] = now_ms;
+            }
+        } else {
+            coreDcmAttAcceptSince_ms[i].reset();
+        }
+
         // A position reset re-seeds the position covariance, so a small P right
         // after a reset is no evidence of a stable estimate (GPS resets seed P
         // well below lane_pos_var_threshold while the position may have jumped
@@ -1146,9 +1195,11 @@ void NavEKF3::UpdateFilter(void)
             last_forced_primary_bad_lane.reset();
             last_forced_primary_bad_reason.reset();
         } else if (!core_is_primary_eligible(core[primary])) {
-            const uint8_t bad_reason = uint8_t(lane_block_reason_id(core[primary]));
-            if (last_forced_primary_bad_lane != primary ||
-                last_forced_primary_bad_reason != bad_reason) {
+            const LaneBlockReason reason = lane_block_reason_id(core[primary]);
+            const uint8_t bad_reason = uint8_t(reason);
+            if ((last_forced_primary_bad_lane != primary ||
+                 last_forced_primary_bad_reason != bad_reason) &&
+                lane_warning_allowed(primary, reason)) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
                     "EKF3 lane %u forced: %s",
@@ -1178,9 +1229,11 @@ void NavEKF3::UpdateFilter(void)
 
         if (!any_lane_eligible) {
             const uint8_t bad_lane = primary;
-            const uint8_t bad_reason = uint8_t(lane_block_reason_id(core[bad_lane]));
-            if (last_auto_primary_bad_lane != bad_lane ||
-                last_auto_primary_bad_reason != bad_reason) {
+            const LaneBlockReason reason = lane_block_reason_id(core[bad_lane]);
+            const uint8_t bad_reason = uint8_t(reason);
+            if ((last_auto_primary_bad_lane != bad_lane ||
+                 last_auto_primary_bad_reason != bad_reason) &&
+                lane_warning_allowed(bad_lane, reason)) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
                     "EKF3 lanes bad: %u %s",

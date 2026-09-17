@@ -132,6 +132,13 @@ public:
 #endif
     };
 
+    // when the simulated spoofer transmits, see GPS::simulate_spoofing()
+    enum class Spoof : uint8_t {
+        DISABLED   = 0,
+        WHEN_ARMED = 1,
+        ALWAYS     = 2,
+    };
+
     GPS(uint8_t _instance);
 
     // update state
@@ -164,10 +171,16 @@ private:
         double longitude;
     } jamming[2];
 
+    struct {
+        uint32_t last_sats_change_ms;
+        uint8_t num_sats;
+    } spoofing_sim_state[AP_SIM_MAX_GPS_SENSORS];
+
     bool _gps_has_basestation_position;
     GPS_Data _gps_basestation_data;
 
     void simulate_jamming(GPS_Data &d);
+    void simulate_spoofing(GPS_Data &d);
 
     // get delayed data
     GPS_Data interpolate_data(const GPS_Data &d, uint32_t delay_ms);

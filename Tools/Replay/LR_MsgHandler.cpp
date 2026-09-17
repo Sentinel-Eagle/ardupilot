@@ -47,6 +47,12 @@ void LR_MsgHandler_RFRN::process_message(uint8_t *msgbytes)
     AP::dal().handle_message(msg);
 }
 
+void LR_MsgHandler_RDCM::process_message(uint8_t *msgbytes)
+{
+    MSG_CREATE(RDCM, msgbytes);
+    AP::dal().handle_message(msg);
+}
+
 void LR_MsgHandler_REV2::process_message(uint8_t *msgbytes)
 {
     MSG_CREATE(REV2, msgbytes);
