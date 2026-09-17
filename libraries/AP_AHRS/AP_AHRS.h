@@ -646,6 +646,16 @@ public:
     const Matrix3f &get_DCM_rotation_body_to_ned(void) const {
         return dcm_estimates.dcm_matrix;
     }
+
+    // get roll/pitch specifically from the DCM backend, which runs every loop
+    // regardless of which backend is active. Deliberately not get_secondary_attitude():
+    // that returns whichever estimator is *secondary*, which is EKF3 itself whenever EKF3
+    // is not primary, and a cross-check of EKF3 against EKF3 would always pass.
+    bool get_DCM_attitude(float &roll_rad, float &pitch_rad) const {
+        roll_rad = dcm_estimates.roll_rad;
+        pitch_rad = dcm_estimates.pitch_rad;
+        return dcm_estimates.attitude_valid;
+    }
 #endif
 
     // rotate a 2D vector from earth frame to body frame
