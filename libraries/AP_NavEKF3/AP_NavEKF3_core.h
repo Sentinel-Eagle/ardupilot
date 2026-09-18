@@ -199,6 +199,10 @@ public:
     // horizontal position source currently in use by this lane (posxy_source() itself is private)
     AP_NavEKF_Source::SourceXY get_posxy_source(void) const { return posxy_source(); }
 
+    // Label naming what this lane is, taken from its EK3_SRCn_POSXY setting, e.g. "EXTNAV".
+    // Every GCS message this lane sends is prefixed "L<n>/<label>: ".
+    const char *lane_label(void) const;
+
     // Maximum NE position state variance above which a lane is
     // considered ineligible as primary. Our ext-nav has variance that depends
     // on altitude, so this gets appropriately scaled.
@@ -1631,7 +1635,8 @@ private:
         uint16_t value;
     } gpsCheckStatus;
 
-    // string representing last reason for prearm failure
+    // Last reason for prearm failure, reason only (e.g. "GPS numsats 5 (needs 6)"); the
+    // frontend prefixes it with this lane's identity to make "L1/GPS: GPS numsats 5 (needs 6)".
     char prearm_fail_string[40];
 
     // earth field from WMM tables

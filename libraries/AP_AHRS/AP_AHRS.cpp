@@ -2381,7 +2381,7 @@ bool AP_AHRS::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
     if (!healthy()) {
         // this rather generic failure might be overwritten by
         // something more specific in the "backend"
-        hal.util->snprintf(failure_msg, failure_msg_len, "Not healthy");
+        hal.util->snprintf(failure_msg, failure_msg_len, "AHRS not healthy");
         ret = false;
     }
 
@@ -2727,7 +2727,7 @@ void AP_AHRS::_getCorrectedDeltaVelocityNED(Vector3f& ret, float& dt) const
 
 void AP_AHRS::set_failure_inconsistent_message(const char *estimator, const char *axis, float diff_rad, char *failure_msg, const uint8_t failure_msg_len) const
 {
-    hal.util->snprintf(failure_msg, failure_msg_len, "%s %s inconsistent %d deg. Wait or reboot", estimator, axis, (int)degrees(diff_rad));
+    hal.util->snprintf(failure_msg, failure_msg_len, "%s: %s diff %d deg", estimator, axis, (int)degrees(diff_rad));
 }
 
 // check all cores providing consistent attitudes for prearm checks
@@ -2771,13 +2771,17 @@ bool AP_AHRS::attitudes_consistent(char *failure_msg, const uint8_t failure_msg_
     // check primary vs ekf3
     if (configured_ekf_type() == EKFType::THREE || active_EKF_type() == EKFType::THREE) {
         for (uint8_t i = 0; i < EKF3.activeCores(); i++) {
+            // each lane is checked, so the lane has to be named or the message cannot be acted on
+            char estimator[24];
+            hal.util->snprintf(estimator, sizeof(estimator), "L%u/%s", (unsigned)i,
+                               EKF3.lane_label(i));
             Quaternion ekf3_quat;
             EKF3.getQuaternionBodyToNED(i, ekf3_quat);
 
             // check roll and pitch difference
             const float rp_diff_rad = primary_quat.roll_pitch_difference(ekf3_quat);
             if (rp_diff_rad > ATTITUDE_CHECK_THRESH_ROLL_PITCH_RAD) {
-                set_failure_inconsistent_message("EKF3", "Roll/Pitch", rp_diff_rad, failure_msg, failure_msg_len);
+                set_failure_inconsistent_message(estimator, "Roll/Pitch", rp_diff_rad, failure_msg, failure_msg_len);
                 return false;
             }
 
@@ -2786,7 +2790,7 @@ bool AP_AHRS::attitudes_consistent(char *failure_msg, const uint8_t failure_msg_
             primary_quat.angular_difference(ekf3_quat).to_axis_angle(angle_diff);
             const float yaw_diff = fabsf(angle_diff.z);
             if (check_yaw && (yaw_diff > ATTITUDE_CHECK_THRESH_YAW_RAD)) {
-                set_failure_inconsistent_message("EKF3", "Yaw", yaw_diff, failure_msg, failure_msg_len);
+                set_failure_inconsistent_message(estimator, "Yaw", yaw_diff, failure_msg, failure_msg_len);
                 return false;
             }
         }

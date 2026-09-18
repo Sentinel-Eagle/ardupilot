@@ -302,6 +302,27 @@ AP_NavEKF_Source::SourceZ AP_NavEKF_Source::getVelZSource(uint8_t source_set_idx
     return _source_set[source_set_idx].velz;
 }
 
+const char *AP_NavEKF_Source::posxy_lane_label(SourceXY posxy_source)
+{
+    switch (posxy_source) {
+    case SourceXY::NONE:
+        return "IMU";
+    case SourceXY::GPS:
+        return "GPS";
+    case SourceXY::BEACON:
+        return "BCN";
+    case SourceXY::OPTFLOW:
+        return "FLOW";
+    case SourceXY::EXTNAV:
+        return "EXTNAV";
+    case SourceXY::WHEEL_ENCODER:
+        return "WHEEL";
+    }
+    // out-of-enum EK3_SRCn_POSXY. pre_arm_check() only rejects this when the mode requires
+    // position, so keep it no longer than "EXTNAV" to hold the message length budget.
+    return "BAD";
+}
+
 // sensor specific helper functions
 bool AP_NavEKF_Source::usingGPS(uint8_t core_index) const
 {
