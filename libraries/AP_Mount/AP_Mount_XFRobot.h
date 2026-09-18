@@ -73,7 +73,12 @@ protected:
 
 private:
 
+    // byte 40 of the GCU reply, "Appendix 7 Pod Code" of the GCU Private Protocol.  Only the models
+    // we behave differently for are listed; the appendix also covers the Z-6/Z-8/Z-9 and D-90/D-125/
+    // D-150 families, which fall through to the conservative defaults.
     enum class PodCode : uint8_t {
+        D80AI = 40,
+        D80PRO = 44,
         Z1PRO = 49,
         Z2PRO = 51,
     };
@@ -81,7 +86,7 @@ private:
     enum class MaxZoomMultiplier : uint8_t {
         Z1PRO = 6,
         Z2PRO = 8,
-        D80N = 40,
+        D80 = 40,
     };
 
     // send text prefix string to reduce flash cost
@@ -156,8 +161,21 @@ private:
         return NATIVE_ANGLES_ONLY;
     };
 
+    // Continuous yaw requires a full configured yaw circle as well as a gimbal that can turn through it.
+    bool yaw_range_is_continuous() const override {
+        return yaw_continuous_enabled() &&
+               _params.yaw_angle_min == -180 &&
+               _params.yaw_angle_max == 180;
+    }
+
+    // resolve MNTx_YAW_CONT, whose default defers the decision to the detected pod
+    bool yaw_continuous_enabled() const;
+
     // send_target_angles
     void send_target_angles(const MountAngleTarget& angle_target_rad) override;
+
+    // convert and constrain the yaw target for the detected gimbal model
+    int16_t constrain_yaw_target_cd(float yaw_control_rad) const;
 
     // send simple (1byte) command to gimbal (e.g. take pic, start recording)
     // returns true on success, false on failure to send
