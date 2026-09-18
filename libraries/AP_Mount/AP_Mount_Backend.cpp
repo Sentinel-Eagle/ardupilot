@@ -375,7 +375,8 @@ void AP_Mount_Backend::update_poi_adjustment()
         }
         // Hold the POI on the plane it already sits on for the whole adjustment.  Re-deriving the
         // altitude part way through (from terrain, say) would re-aim the gimbal mid-movement.
-        if (!_roi_target.get_alt_cm(Location::AltFrame::ABSOLUTE, poi_adjustment.plane_alt_cm)) {
+        if (!_roi_target.initialised() ||
+            !_roi_target.get_alt_cm(Location::AltFrame::ABSOLUTE, poi_adjustment.plane_alt_cm)) {
             return;
         }
         poi_adjustment.active = true;
@@ -991,6 +992,12 @@ AP_Mount_Backend::PoiProjection AP_Mount_Backend::project_los_to_altitude(const 
 // calculate location gimbal is pointing at a specified altitude
 bool AP_Mount_Backend::calculate_poi_at_altitude(const Location &altitude_location, Location &target_location)
 {
+    // the reference may be home, which is still (0,0,0) until the EKF has an origin; get_alt_cm() panics
+    // on an uninitialised Location under SITL rather than returning false
+    if (!altitude_location.initialised()) {
+        return false;
+    }
+
     Location cur_loc;
     if (!get_vehicle_location(cur_loc)) {
         return false;
