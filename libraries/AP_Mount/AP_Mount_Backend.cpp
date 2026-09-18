@@ -245,6 +245,14 @@ void AP_Mount_Backend::set_rate_target(float roll_degs, float pitch_degs, float 
 // set_roi_target - sets target location that mount should attempt to point towards
 void AP_Mount_Backend::set_roi_target(const Location &target_loc)
 {
+    // An uninitialised ROI would switch the mount to GPS_POINT and then strand it there:
+    // get_angle_target_to_roi() rejects the same location every cycle, so no angles are ever sent
+    // and the sticks, which no longer drive body-frame yaw in this mode, stop doing anything.
+    if (!target_loc.initialised()) {
+        send_warning_to_GCS("Mount: ignoring invalid ROI");
+        return;
+    }
+
 #if AP_MOUNT_POI_LOCK_ENABLED
     reset_poi_adjustment();
 #endif

@@ -583,6 +583,32 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget& angle_target_r
     last_send_ms = AP_HAL::millis();
 }
 
+// MNTx_YAW_CONT defaults to AUTO because the right answer is a property of the gimbal, not of the
+// airframe: a Z1/Z2Pro cannot reach past +-140 deg, a D80 turns freely.  An explicit 0 or 1 still wins,
+// so a pod we have no entry for can be opted in by hand.
+bool AP_Mount_XFRobot::yaw_continuous_enabled() const
+{
+    if (_params.yaw_continuous >= 0) {
+        return _params.yaw_continuous != 0;
+    }
+
+    // before the first GCU reply we do not know the pod, and a gimbal wound past its stop is the
+    // expensive mistake, so an unknown pod is treated as limited
+    if (!detected_pod_code.has_value()) {
+        return false;
+    }
+    switch (*detected_pod_code) {
+    case PodCode::D80AI:
+    case PodCode::D80PRO:
+        return true;
+    case PodCode::Z1PRO:
+    case PodCode::Z2PRO:
+        return false;
+    default:
+        return false;
+    }
+}
+
 int16_t AP_Mount_XFRobot::constrain_yaw_target_cd(float yaw_control_rad) const
 {
     const float yaw_control_cd = degrees(yaw_control_rad) * 100;
@@ -693,6 +719,9 @@ std::optional<float> AP_Mount_XFRobot::get_known_max_zoom_multiplier() const {
         return static_cast<float>(MaxZoomMultiplier::Z1PRO);
     case PodCode::Z2PRO:
         return static_cast<float>(MaxZoomMultiplier::Z2PRO);
+    case PodCode::D80AI:
+    case PodCode::D80PRO:
+        return static_cast<float>(MaxZoomMultiplier::D80);
     default:
         return {};
     }

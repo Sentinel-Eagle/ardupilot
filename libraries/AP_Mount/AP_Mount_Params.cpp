@@ -175,10 +175,10 @@ const AP_Param::GroupInfo AP_Mount_Params::var_info[] = {
 
     // @Param: _YAW_CONT
     // @DisplayName: Mount continuous yaw
-    // @Description: Enable continuous body-frame yaw rate control when yaw minimum and maximum are configured to -180 and 180 degrees
-    // @Values: 0:Disabled,1:Enabled
+    // @Description: Enable continuous body-frame yaw rate control when yaw minimum and maximum are configured to -180 and 180 degrees. Auto lets the driver decide from the detected gimbal model.
+    // @Values: -1:Auto,0:Disabled,1:Enabled
     // @User: Standard
-    AP_GROUPINFO("_YAW_CONT", 17, AP_Mount_Params, yaw_continuous, 0),
+    AP_GROUPINFO("_YAW_CONT", 17, AP_Mount_Params, yaw_continuous, -1),
 
     AP_GROUPEND
 };
