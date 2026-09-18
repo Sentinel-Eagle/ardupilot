@@ -937,7 +937,7 @@ void NavEKF3_core::FuseVelPosNED()
                         if (!extNavRepositionMessageSentThisCycle) {
                             GCS_SEND_TEXT(
                                 MAV_SEVERITY_WARNING,
-                                "lane %u/%s: repositioned, %s",
+                                "L%u/%s: repositioned: %s",
                                 (unsigned)core_index,
                                 lane_label(),
                                 reason);
@@ -2037,7 +2037,7 @@ void NavEKF3_core::FuseBodyVel()
             // notify first time only
             if (!bodyVelFusionActive) {
                 bodyVelFusionActive = true;
-                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: fusing odometry",(unsigned)core_index,lane_label());
+                GCS_SEND_TEXT(MAV_SEVERITY_INFO, "L%u/%s: fusing odometry",(unsigned)core_index,lane_label());
             }
 
             // correct the covariance P = (I - K*H)*P = P - K*H*P. take advantage of

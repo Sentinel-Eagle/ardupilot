@@ -200,7 +200,7 @@ public:
     AP_NavEKF_Source::SourceXY get_posxy_source(void) const { return posxy_source(); }
 
     // Label naming what this lane is, taken from its EK3_SRCn_POSXY setting, e.g. "EXTNAV".
-    // Every GCS message this lane sends is prefixed "EKF3 lane <n>/<label>: ".
+    // Every GCS message this lane sends is prefixed "L<n>/<label>: ".
     const char *lane_label(void) const;
 
     // Maximum NE position state variance above which a lane is
@@ -1635,8 +1635,8 @@ private:
         uint16_t value;
     } gpsCheckStatus;
 
-    // Last reason for prearm failure, reason only (e.g. "numsats 5 < 6"); the frontend
-    // prefixes it with this lane's identity to make "EKF3 lane 1/GPS: numsats 5 < 6".
+    // Last reason for prearm failure, reason only (e.g. "GPS numsats 5 (needs 6)"); the
+    // frontend prefixes it with this lane's identity to make "L1/GPS: GPS numsats 5 (needs 6)".
     char prearm_fail_string[40];
 
     // earth field from WMM tables

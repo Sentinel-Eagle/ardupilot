@@ -204,7 +204,7 @@ bool NavEKF3_core::setup_core(uint8_t _imu_index, uint8_t _core_index)
                 }
                 GCS_SEND_TEXT(
                     severity,
-                    "lane %u/%s: waiting for GPS config data",
+                    "L%u/%s: waiting for GPS config data",
                     (unsigned)core_index,
                     lane_label());
             }
@@ -320,14 +320,14 @@ bool NavEKF3_core::setup_core(uint8_t _imu_index, uint8_t _core_index)
     if ((yawEstimator == nullptr) && (frontend->_gsfRunMask & (1U<<core_index))) {
         // check if there is enough memory to create the EKF-GSF object
         if (dal.available_memory() < sizeof(EKFGSF_yaw) + 1024) {
-            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "lane %u/%s: GSF not enough memory",(unsigned)core_index,lane_label());
+            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "L%u/%s: GSF: not enough memory",(unsigned)core_index,lane_label());
             return false;
         }
 
         // try to instantiate
         yawEstimator = NEW_NOTHROW EKFGSF_yaw();
         if (yawEstimator == nullptr) {
-            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "lane %u/%s: GSF allocation failed",(unsigned)core_index,lane_label());
+            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "L%u/%s: GSF: allocation failed",(unsigned)core_index,lane_label());
             return false;
         }
     }
@@ -634,7 +634,7 @@ bool NavEKF3_core::InitialiseFilterBootstrap(void)
         dal.gps().status(preferred_gps) < AP_DAL_GPS::GPS_OK_FIX_3D) {
         dal.snprintf(prearm_fail_string,
                      sizeof(prearm_fail_string),
-                     "no GPS lock at init");
+                     "init failure: No GPS lock");
         statesInitialised = false;
         return false;
     }
@@ -723,7 +723,7 @@ bool NavEKF3_core::InitialiseFilterBootstrap(void)
         inactiveBias[i].accel_bias.zero();
     }
 
-    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: initialised",(unsigned)core_index,lane_label());
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "L%u/%s: initialised",(unsigned)core_index,lane_label());
 
     // we initially return false to wait for the IMU buffer to fill
     return false;
@@ -885,7 +885,7 @@ void NavEKF3_core::UpdateFilter(bool predict)
         // controller slews out. Accepted: this reset is already loud (warning
         // above) and re-fanning origins across lanes was deliberately removed
         // (see "don't propagate gps origin").
-        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "lane %u/%s: forced reset",(unsigned)core_index,lane_label());
+        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "L%u/%s: forced reset",(unsigned)core_index,lane_label());
         last_filter_ok_ms = 0;
         statesInitialised = false;
         InitialiseFilterBootstrap();

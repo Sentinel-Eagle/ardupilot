@@ -2381,7 +2381,7 @@ bool AP_AHRS::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
     if (!healthy()) {
         // this rather generic failure might be overwritten by
         // something more specific in the "backend"
-        hal.util->snprintf(failure_msg, failure_msg_len, "Not healthy");
+        hal.util->snprintf(failure_msg, failure_msg_len, "AHRS not healthy");
         ret = false;
     }
 
@@ -2750,7 +2750,7 @@ bool AP_AHRS::attitudes_consistent(char *failure_msg, const uint8_t failure_msg_
             // check roll and pitch difference
             const float rp_diff_rad = primary_quat.roll_pitch_difference(ekf2_quat);
             if (rp_diff_rad > ATTITUDE_CHECK_THRESH_ROLL_PITCH_RAD) {
-                set_failure_inconsistent_message("EKF2", "tilt", rp_diff_rad, failure_msg, failure_msg_len);
+                set_failure_inconsistent_message("EKF2", "Roll/Pitch", rp_diff_rad, failure_msg, failure_msg_len);
                 return false;
             }
 
@@ -2759,7 +2759,7 @@ bool AP_AHRS::attitudes_consistent(char *failure_msg, const uint8_t failure_msg_
             primary_quat.angular_difference(ekf2_quat).to_axis_angle(angle_diff);
             const float yaw_diff = fabsf(angle_diff.z);
             if (check_yaw && (yaw_diff > ATTITUDE_CHECK_THRESH_YAW_RAD)) {
-                set_failure_inconsistent_message("EKF2", "yaw", yaw_diff, failure_msg, failure_msg_len);
+                set_failure_inconsistent_message("EKF2", "Yaw", yaw_diff, failure_msg, failure_msg_len);
                 return false;
             }
         }
@@ -2773,7 +2773,7 @@ bool AP_AHRS::attitudes_consistent(char *failure_msg, const uint8_t failure_msg_
         for (uint8_t i = 0; i < EKF3.activeCores(); i++) {
             // each lane is checked, so the lane has to be named or the message cannot be acted on
             char estimator[24];
-            hal.util->snprintf(estimator, sizeof(estimator), "lane %u/%s", (unsigned)i,
+            hal.util->snprintf(estimator, sizeof(estimator), "L%u/%s", (unsigned)i,
                                EKF3.lane_label(i));
             Quaternion ekf3_quat;
             EKF3.getQuaternionBodyToNED(i, ekf3_quat);
@@ -2781,7 +2781,7 @@ bool AP_AHRS::attitudes_consistent(char *failure_msg, const uint8_t failure_msg_
             // check roll and pitch difference
             const float rp_diff_rad = primary_quat.roll_pitch_difference(ekf3_quat);
             if (rp_diff_rad > ATTITUDE_CHECK_THRESH_ROLL_PITCH_RAD) {
-                set_failure_inconsistent_message(estimator, "tilt", rp_diff_rad, failure_msg, failure_msg_len);
+                set_failure_inconsistent_message(estimator, "Roll/Pitch", rp_diff_rad, failure_msg, failure_msg_len);
                 return false;
             }
 
@@ -2790,7 +2790,7 @@ bool AP_AHRS::attitudes_consistent(char *failure_msg, const uint8_t failure_msg_
             primary_quat.angular_difference(ekf3_quat).to_axis_angle(angle_diff);
             const float yaw_diff = fabsf(angle_diff.z);
             if (check_yaw && (yaw_diff > ATTITUDE_CHECK_THRESH_YAW_RAD)) {
-                set_failure_inconsistent_message(estimator, "yaw", yaw_diff, failure_msg, failure_msg_len);
+                set_failure_inconsistent_message(estimator, "Yaw", yaw_diff, failure_msg, failure_msg_len);
                 return false;
             }
         }
@@ -2807,7 +2807,7 @@ bool AP_AHRS::attitudes_consistent(char *failure_msg, const uint8_t failure_msg_
         // check roll and pitch difference
         const float rp_diff_rad = primary_quat.roll_pitch_difference(dcm_quat);
         if (rp_diff_rad > ATTITUDE_CHECK_THRESH_ROLL_PITCH_RAD) {
-            set_failure_inconsistent_message("DCM", "tilt", rp_diff_rad, failure_msg, failure_msg_len);
+            set_failure_inconsistent_message("DCM", "Roll/Pitch", rp_diff_rad, failure_msg, failure_msg_len);
             return false;
         }
 
@@ -2822,7 +2822,7 @@ bool AP_AHRS::attitudes_consistent(char *failure_msg, const uint8_t failure_msg_
             primary_quat.angular_difference(dcm_quat).to_axis_angle(angle_diff);
             const float yaw_diff = fabsf(angle_diff.z);
             if (check_yaw && (yaw_diff > ATTITUDE_CHECK_THRESH_YAW_RAD)) {
-                set_failure_inconsistent_message("DCM", "yaw", yaw_diff, failure_msg, failure_msg_len);
+                set_failure_inconsistent_message("DCM", "Yaw", yaw_diff, failure_msg, failure_msg_len);
                 return false;
             }
         }

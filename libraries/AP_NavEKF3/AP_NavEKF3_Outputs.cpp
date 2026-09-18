@@ -60,7 +60,7 @@ bool NavEKF3_core::pre_arm_check(bool requires_position, char *failure_msg, uint
             !has_acceptable_posxy_variance()) {
             const float pos_variance = get_pos_variance_NE();
             dal.snprintf(failure_msg, failure_msg_len,
-                         "lane %u/%s: pos var %.1f",
+                         "L%u/%s: pos variance %.1f",
                          unsigned(core_index),
                          lane_label(),
                          (double)pos_variance);
@@ -73,7 +73,7 @@ bool NavEKF3_core::pre_arm_check(bool requires_position, char *failure_msg, uint
             if (hvel_innovation > MAX_VEL_INNOVATION) {
                 // more than 2 m/s horizontal velocity innovation on the ground
                 dal.snprintf(failure_msg, failure_msg_len,
-                             "lane %u/%s: vel err %.1f",
+                             "L%u/%s: vel error %.1f",
                              unsigned(core_index), lane_label(), (double)hvel_innovation);
                 return false;
             }

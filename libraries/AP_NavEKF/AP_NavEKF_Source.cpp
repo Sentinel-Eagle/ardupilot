@@ -318,7 +318,9 @@ const char *AP_NavEKF_Source::posxy_lane_label(SourceXY posxy_source)
     case SourceXY::WHEEL_ENCODER:
         return "WHEEL";
     }
-    return "UNKNOWN";
+    // out-of-enum EK3_SRCn_POSXY. pre_arm_check() only rejects this when the mode requires
+    // position, so keep it no longer than "EXTNAV" to hold the message length budget.
+    return "BAD";
 }
 
 // sensor specific helper functions

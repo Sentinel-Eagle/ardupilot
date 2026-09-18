@@ -261,7 +261,7 @@ void Copter::check_ekf_reset()
         attitude_control->inertial_frame_reset();
         ekf_primary_core = ahrs.get_primary_core_index();
         LOGGER_WRITE_ERROR(LogErrorSubsystem::EKF_PRIMARY, LogErrorCode(ekf_primary_core));
-        gcs().send_text(MAV_SEVERITY_WARNING, "EKF primary lane changed: %u", (unsigned)ekf_primary_core);
+        gcs().send_text(MAV_SEVERITY_WARNING, "EKF primary changed:%u", (unsigned)ekf_primary_core);
     }
 }
 

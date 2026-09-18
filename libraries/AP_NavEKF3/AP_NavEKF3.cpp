@@ -146,6 +146,10 @@ static bool lane_warning_allowed(uint8_t lane, LaneBlockReason reason)
 // hidden behind whichever lane is reported first. Each lane therefore gets its own status text,
 // repeated only when its message changes or after this interval.
 static constexpr uint32_t PREARM_REPORT_INTERVAL_MS = 30000;
+// Many of these messages carry a live value, so their text changes on every call and the
+// interval above would never apply. A changed reason is still worth reporting early, but a
+// lane never reports faster than this.
+static constexpr uint32_t PREARM_REPORT_MIN_INTERVAL_MS = 5000;
 
 static bool prearm_report_allowed(uint8_t lane, const char *msg)
 {
@@ -157,8 +161,12 @@ static bool prearm_report_allowed(uint8_t lane, const char *msg)
     }
     const uint32_t crc = crc_crc32(0, (const uint8_t *)msg, strlen(msg));
     const uint32_t now_ms = AP::dal().millis();
-    if (last_ms[lane] != 0 && last_crc[lane] == crc && now_ms - last_ms[lane] < PREARM_REPORT_INTERVAL_MS) {
-        return false;
+    if (last_ms[lane] != 0) {
+        const uint32_t age_ms = now_ms - last_ms[lane];
+        if (age_ms < PREARM_REPORT_MIN_INTERVAL_MS ||
+            (last_crc[lane] == crc && age_ms < PREARM_REPORT_INTERVAL_MS)) {
+            return false;
+        }
     }
     last_ms[lane] = now_ms;
     last_crc[lane] = crc;
@@ -1114,7 +1122,7 @@ void NavEKF3::report_lane_sensor_assignments(void) const
             msg_len += MAX(dal.snprintf(msg+msg_len, sizeof(msg)-msg_len, " airspeed%u", (unsigned)i), 0);
             msg_len = MIN(msg_len, sizeof(msg)-1);
         }
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "lane %u/%s: %s", (unsigned)i, lane_label(i), msg);
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "L%u/%s: %s", (unsigned)i, lane_label(i), msg);
     }
 }
 
@@ -1214,7 +1222,7 @@ void NavEKF3::UpdateFilter(void)
             if (last_forced_primary_invalid_lane != forced_primary_index) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
-                    "lane %u: request invalid",
+                    "L%u: request invalid",
                     (unsigned)forced_primary_index);
                 last_forced_primary_invalid_lane = forced_primary_index;
             }
@@ -1228,7 +1236,7 @@ void NavEKF3::UpdateFilter(void)
                 lane_warning_allowed(primary, reason)) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
-                    "lane %u/%s forced: %s",
+                    "L%u/%s: forced, %s",
                     (unsigned)primary,
                     lane_label(primary),
                     lane_block_reason(core[primary]));
@@ -1241,7 +1249,7 @@ void NavEKF3::UpdateFilter(void)
             if (last_forced_primary_bad_lane.has_value()) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_INFO,
-                    "lane %u/%s: forced recovered",
+                    "L%u/%s: forced recovered",
                     (unsigned)primary,
                     lane_label(primary));
                 last_forced_primary_bad_lane.reset();
@@ -1264,7 +1272,7 @@ void NavEKF3::UpdateFilter(void)
                 lane_warning_allowed(bad_lane, reason)) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
-                    "lanes bad, lane %u/%s: %s",
+                    "lanes bad, L%u/%s: %s",
                     (unsigned)bad_lane,
                     lane_label(bad_lane),
                     lane_block_reason(core[bad_lane]));
@@ -1377,7 +1385,7 @@ bool NavEKF3::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
         const AP_NavEKF_Source::SourceYaw yaw_source = sources.getYawSource(i);
         if (((magCalParamVal == 5) || (magCalParamVal == 6)) && (yaw_source != AP_NavEKF_Source::SourceYaw::GPS)) {
             // yaw source is configured to use compass but MAG_CAL valid is deprecated
-            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "PreArm: lane %u/%s: EK3_MAG_CAL vs EK3_SRC%u_YAW", unsigned(i), lane_label(i), unsigned(i) + 1);
+            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "PreArm: L%u/%s: EK3_MAG_CAL vs EK3_SRC%u_YAW", unsigned(i), lane_label(i), unsigned(i) + 1);
             magCalInconsistent = true;
         }
     }
@@ -1392,7 +1400,8 @@ bool NavEKF3::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
     }
     bool all_lanes_ready = true;
     for (uint8_t i = 0; i < num_cores; i++) {
-        // sized like the vehicle arming buffers so a lane message is reported as it will be seen
+        // Both report paths below prepend "PreArm: " into a 50 character STATUSTEXT, so only the
+        // first 42 characters of a lane message are ever seen; every message is written to fit.
         char lane_msg[50] {};
         if (lane_pre_arm_check(i, requires_position, lane_msg, sizeof(lane_msg))) {
             continue;
@@ -1422,17 +1431,17 @@ bool NavEKF3::lane_pre_arm_check(uint8_t lane, bool requires_position, char *fai
 {
     Location origin;
     if (!core[lane].getOriginLLH(origin)) {
-        dal.snprintf(failure_msg, failure_msg_len, "lane %u/%s: no origin",
+        dal.snprintf(failure_msg, failure_msg_len, "L%u/%s: has no origin",
                      (unsigned)lane, lane_label(lane));
         return false;
     }
     if (!core[lane].healthy()) {
         const char *failure = core[lane].prearm_failure_reason();
         if (failure != nullptr) {
-            dal.snprintf(failure_msg, failure_msg_len, "lane %u/%s: %s",
+            dal.snprintf(failure_msg, failure_msg_len, "L%u/%s: %s",
                          (unsigned)lane, lane_label(lane), failure);
         } else {
-            dal.snprintf(failure_msg, failure_msg_len, "lane %u/%s: unhealthy",
+            dal.snprintf(failure_msg, failure_msg_len, "L%u/%s: unhealthy",
                          (unsigned)lane, lane_label(lane));
         }
         return false;
@@ -2386,7 +2395,7 @@ void NavEKF3::alignLaneSwitchPositionIfNeeded(uint8_t new_primary, uint8_t old_p
     if (core[new_primary].align_horizontal_position_to(core[old_primary])) {
         GCS_SEND_TEXT(
             MAV_SEVERITY_INFO,
-            "lane %u/%s: copied pos from lane %u",
+            "L%u/%s: copied pos from %u",
             (unsigned)new_primary,
             lane_label(new_primary),
             (unsigned)old_primary);
