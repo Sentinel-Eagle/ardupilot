@@ -719,6 +719,13 @@ bool AP_Arming::gps_checks(bool report)
                 continue;
             }
 
+            // A receiver the navigation filter does not use (ext-nav or IMU-only EKF3 primary
+            // lane) may be jammed, spoofed or silent without grounding the vehicle: the lane that
+            // depends on it simply stays unselectable.
+            if (!AP::ahrs().gps_required_for_navigation()) {
+                continue;
+            }
+
             //GPS OK?
             if (gps.status(i) < AP_GPS::GPS_OK_FIX_3D) {
                 check_failed(Check::GPS, report, "GPS %i: Bad fix", i+1);

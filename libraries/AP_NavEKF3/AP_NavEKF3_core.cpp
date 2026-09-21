@@ -628,16 +628,11 @@ bool NavEKF3_core::InitialiseFilterBootstrap(void)
     // update sensor selection (for affinity)
     update_sensor_selection();
 
-    // If we are a plane and don't have GPS lock then don't initialise GPS-dependent lanes.
-    if (assume_zero_sideslip() &&
-        uses_any_gps_source() &&
-        dal.gps().status(preferred_gps) < AP_DAL_GPS::GPS_OK_FIX_3D) {
-        dal.snprintf(prearm_fail_string,
-                     sizeof(prearm_fail_string),
-                     "init failure: No GPS lock");
-        statesInitialised = false;
-        return false;
-    }
+    // Upstream refuses to initialise a plane's GPS lane until it has a 3D fix. We do not:
+    // NavEKF3::InitialiseFilter() needs every core, so that would keep the whole filter, non-GPS
+    // lanes included, off until the GPS gets healthy. Started without a fix the lane runs in
+    // constant-position mode like a copter's would, stays ineligible as primary ("gps no
+    // origin"), and begins aiding once a fix passes the usual quality checks.
 
     // read all the sensors required to start the EKF the states
     readIMUData(false);  // don't allow prediction
