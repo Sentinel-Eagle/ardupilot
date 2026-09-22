@@ -694,7 +694,7 @@ bool AP_Arming::compass_checks(bool report)
 bool AP_Arming::gps_checks(bool report)
 {
     const AP_GPS &gps = AP::gps();
-    if (check_enabled(Check::GPS)) {
+    if (check_enabled(Check::GPS) && AP::ahrs().configured_to_use_gps_for_posxy()) {
 
         // Any failure messages from GPS backends
         char failure_msg[100] = {};
@@ -719,13 +719,6 @@ bool AP_Arming::gps_checks(bool report)
                 continue;
             }
 
-            // A receiver the navigation filter does not use (ext-nav or IMU-only EKF3 primary
-            // lane) may be jammed, spoofed or silent without grounding the vehicle: the lane that
-            // depends on it simply stays unselectable.
-            if (!AP::ahrs().gps_required_for_navigation()) {
-                continue;
-            }
-
             //GPS OK?
             if (gps.status(i) < AP_GPS::GPS_OK_FIX_3D) {
                 check_failed(Check::GPS, report, "GPS %i: Bad fix", i+1);
@@ -739,11 +732,6 @@ bool AP_Arming::gps_checks(bool report)
             }
         }
 
-        if (!AP::ahrs().home_is_set()) {
-            check_failed(Check::GPS, report, "AHRS: waiting for home");
-            return false;
-        }
-
         // check GPSs are within 50m of each other and that blending is healthy
         float distance_m;
         if (!gps.all_consistent(distance_m)) {
@@ -752,15 +740,11 @@ bool AP_Arming::gps_checks(bool report)
             return false;
         }
 
-        // check AHRS and GPS are within 10m of each other
-        // when GPS is the active horizontal position source.
-        // Note: configured_to_use_gps_for_posxy() resolves through the PRIMARY lane's
-        // source set, so with lane separation this check is skipped entirely whenever
-        // the ext-nav lane is primary at arm time - a bad ext-nav position is then
-        // never cross-checked against GPS before arming. Known and accepted for now:
-        // extending the check to "any configured lane uses GPS" would reintroduce a
-        // GPS dependency on ext-nav-primary arming that we don't want.
-        if (AP::ahrs().configured_to_use_gps_for_posxy() && gps.num_sensors() > 0) {
+        // check AHRS and GPS are within 10m of each other. We only reach here when GPS is the
+        // primary lane's horizontal position source. When the primary lane uses something else,
+        // we don't check it, as we would be comparing different positioning sources and
+        // one of them might be malfunctioning.
+        if (gps.num_sensors() > 0) {
             const Location gps_loc = gps.location();
             Location ahrs_loc;
             if (AP::ahrs().get_location(ahrs_loc)) {
@@ -771,6 +755,13 @@ bool AP_Arming::gps_checks(bool report)
                 }
             }
         }
+    }
+
+    // This check is deliberately outside the `if` block that is above.
+    // Home can come from any lane, so it is required either way.
+    if (check_enabled(Check::GPS) && !AP::ahrs().home_is_set()) {
+        check_failed(Check::GPS, report, "AHRS: waiting for home");
+        return false;
     }
 
     if (check_enabled(Check::GPS_CONFIG)) {

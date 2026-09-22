@@ -341,11 +341,6 @@ public:
     // requires_position should be true if horizontal position configuration should be checked
     bool pre_arm_check(bool requires_position, char *failure_msg, uint8_t failure_msg_len) const;
 
-    // true when the active navigation filter positions from a GPS receiver, so a GPS fix is
-    // needed to fly. False for an EKF3 primary lane that positions from ext-nav or is IMU-only:
-    // such a vehicle may arm while the GPS is jammed or spoofed.
-    bool gps_required_for_navigation(void) const;
-
     // true if the AHRS has completed initialisation
     bool initialised() const;
 

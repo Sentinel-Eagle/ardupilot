@@ -2373,16 +2373,6 @@ bool AP_AHRS::healthy(void) const
     return false;
 }
 
-bool AP_AHRS::gps_required_for_navigation(void) const
-{
-#if HAL_NAVEKF3_AVAILABLE
-    if (configured_ekf_type() == EKFType::THREE && _ekf3_started) {
-        return EKF3.configuredToUseGPSForPosXY();
-    }
-#endif
-    return true;
-}
-
 // returns false if we fail arming checks, in which case the buffer will be populated with a failure message
 // requires_position should be true if horizontal position configuration should be checked
 bool AP_AHRS::pre_arm_check(bool requires_position, char *failure_msg, uint8_t failure_msg_len) const
