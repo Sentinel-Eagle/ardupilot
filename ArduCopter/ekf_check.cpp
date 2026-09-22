@@ -83,7 +83,9 @@ void Copter::ekf_check()
                 LOGGER_WRITE_ERROR(LogErrorSubsystem::EKFCHECK, LogErrorCode::EKFCHECK_BAD_VARIANCE);
                 // send message to gcs
                 if ((AP_HAL::millis() - ekf_check_state.last_warn_time) > EKF_CHECK_WARNING_TIME) {
-                    gcs().send_text(MAV_SEVERITY_CRITICAL, "EKF lane %d variance", (int)ahrs.get_primary_core_index());
+                    char estimator[16];
+                    ahrs.get_primary_estimator_name(estimator, sizeof(estimator));
+                    gcs().send_text(MAV_SEVERITY_CRITICAL, "%s: variance", estimator);
                     ekf_check_state.last_warn_time = AP_HAL::millis();
                 }
                 failsafe_ekf_event();
@@ -261,7 +263,9 @@ void Copter::check_ekf_reset()
         attitude_control->inertial_frame_reset();
         ekf_primary_core = ahrs.get_primary_core_index();
         LOGGER_WRITE_ERROR(LogErrorSubsystem::EKF_PRIMARY, LogErrorCode(ekf_primary_core));
-        gcs().send_text(MAV_SEVERITY_WARNING, "EKF primary changed:%u", (unsigned)ekf_primary_core);
+        char estimator[16];
+        ahrs.get_primary_estimator_name(estimator, sizeof(estimator));
+        gcs().send_text(MAV_SEVERITY_WARNING, "%s: now primary", estimator);
     }
 }
 

@@ -115,7 +115,7 @@ static void send_lane_switch_reason(
         (core_is_primary_eligible(old_core) ? "lower lane stable" : lane_block_reason(old_core));
     GCS_SEND_TEXT(
         MAV_SEVERITY_CRITICAL,
-        "lane switch %u->%u: %s",
+        "lane switch L%u->L%u: %s",
         (unsigned)old_primary,
         (unsigned)new_primary,
         reason);
@@ -1222,7 +1222,7 @@ void NavEKF3::UpdateFilter(void)
             if (last_forced_primary_invalid_lane != forced_primary_index) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
-                    "L%u: request invalid",
+                    "EK3_PRIMARY=%u invalid",
                     (unsigned)forced_primary_index);
                 last_forced_primary_invalid_lane = forced_primary_index;
             }
@@ -1272,7 +1272,7 @@ void NavEKF3::UpdateFilter(void)
                 lane_warning_allowed(bad_lane, reason)) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
-                    "lanes bad, L%u/%s: %s",
+                    "L%u/%s: lanes bad, %s",
                     (unsigned)bad_lane,
                     lane_label(bad_lane),
                     lane_block_reason(core[bad_lane]));
@@ -1385,12 +1385,20 @@ bool NavEKF3::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
         const AP_NavEKF_Source::SourceYaw yaw_source = sources.getYawSource(i);
         if (((magCalParamVal == 5) || (magCalParamVal == 6)) && (yaw_source != AP_NavEKF_Source::SourceYaw::GPS)) {
             // yaw source is configured to use compass but MAG_CAL valid is deprecated
-            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "PreArm: L%u/%s: EK3_MAG_CAL vs EK3_SRC%u_YAW", unsigned(i), lane_label(i), unsigned(i) + 1);
-            magCalInconsistent = true;
+            char lane_msg[50] {};
+            dal.snprintf(lane_msg, sizeof(lane_msg), "L%u/%s: EK3_MAG_CAL vs EK3_SRC%u_YAW",
+                         unsigned(i), lane_label(i), unsigned(i) + 1);
+            if (!magCalInconsistent) {
+                // the caller reports this one itself, so only the lanes it has no room for
+                // need a status text of their own
+                dal.snprintf(failure_msg, failure_msg_len, "%s", lane_msg);
+                magCalInconsistent = true;
+            } else if (prearm_report_allowed(i, lane_msg)) {
+                GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "PreArm: %s", lane_msg);
+            }
         }
     }
     if (magCalInconsistent) {
-        dal.snprintf(failure_msg, failure_msg_len, "EK3_MAG_CAL and EK3_SRCn_YAW inconsistent");
         return false;
     }
 
@@ -2395,7 +2403,7 @@ void NavEKF3::alignLaneSwitchPositionIfNeeded(uint8_t new_primary, uint8_t old_p
     if (core[new_primary].align_horizontal_position_to(core[old_primary])) {
         GCS_SEND_TEXT(
             MAV_SEVERITY_INFO,
-            "L%u/%s: copied pos from %u",
+            "L%u/%s: copied pos from L%u",
             (unsigned)new_primary,
             lane_label(new_primary),
             (unsigned)old_primary);

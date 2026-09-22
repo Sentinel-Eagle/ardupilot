@@ -323,6 +323,17 @@ const char *AP_NavEKF_Source::posxy_lane_label(SourceXY posxy_source)
     return "BAD";
 }
 
+// Source sets map one-to-one onto EKF3 lanes, so a message about set `i` is a message about
+// lane `i` and is prefixed like every other lane message. The EK3_SRCn_ parameter name keeps
+// its own 1-based n, which is how the parameter is spelled.
+void AP_NavEKF_Source::snprintf_lane_param_failure(char *failure_msg, uint8_t failure_msg_len,
+                                                   uint8_t lane, const char *param_suffix) const
+{
+    hal.util->snprintf(failure_msg, failure_msg_len, "L%u/%s: check EK3_SRC%u_%s",
+                       (unsigned)lane, posxy_lane_label(getPosXYSource(lane)),
+                       (unsigned)lane + 1, param_suffix);
+}
+
 // sensor specific helper functions
 bool AP_NavEKF_Source::usingGPS(uint8_t core_index) const
 {
@@ -387,7 +398,7 @@ bool AP_NavEKF_Source::pre_arm_check(bool requires_position, char *failure_msg, 
             case SourceXY::WHEEL_ENCODER:
             default:
                 // invalid posxy value
-                hal.util->snprintf(failure_msg, failure_msg_len, "Check EK3_SRC%d_POSXY", (int)i+1);
+                snprintf_lane_param_failure(failure_msg, failure_msg_len, i, "POSXY");
                 return false;
             }
 
@@ -410,7 +421,7 @@ bool AP_NavEKF_Source::pre_arm_check(bool requires_position, char *failure_msg, 
             case SourceXY::BEACON:
             default:
                 // invalid velxy value
-                hal.util->snprintf(failure_msg, failure_msg_len, "Check EK3_SRC%d_VELXY", (int)i+1);
+                snprintf_lane_param_failure(failure_msg, failure_msg_len, i, "VELXY");
                 return false;
             }
 
@@ -435,7 +446,7 @@ bool AP_NavEKF_Source::pre_arm_check(bool requires_position, char *failure_msg, 
                 break;
             default:
                 // invalid posz value
-                hal.util->snprintf(failure_msg, failure_msg_len, "Check EK3_SRC%d_POSZ", (int)i+1);
+                snprintf_lane_param_failure(failure_msg, failure_msg_len, i, "POSZ");
                 return false;
             }
 
@@ -454,7 +465,7 @@ bool AP_NavEKF_Source::pre_arm_check(bool requires_position, char *failure_msg, 
             case SourceZ::BEACON:
             default:
                 // invalid velz value
-                hal.util->snprintf(failure_msg, failure_msg_len, "Check EK3_SRC%d_VELZ", (int)i+1);
+                snprintf_lane_param_failure(failure_msg, failure_msg_len, i, "VELZ");
                 return false;
             }
         }
@@ -479,7 +490,7 @@ bool AP_NavEKF_Source::pre_arm_check(bool requires_position, char *failure_msg, 
             break;
         default:
             // invalid yaw value
-            hal.util->snprintf(failure_msg, failure_msg_len, "Check EK3_SRC%d_YAW", (int)i+1);
+            snprintf_lane_param_failure(failure_msg, failure_msg_len, i, "YAW");
             return false;
         }
     }

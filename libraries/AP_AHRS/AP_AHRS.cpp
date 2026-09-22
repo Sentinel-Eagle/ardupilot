@@ -537,35 +537,8 @@ void AP_AHRS::update(bool skip_ins_update)
 #if HAL_GCS_ENABLED
     if (state.active_EKF != last_active_ekf_type) {
         last_active_ekf_type = state.active_EKF;
-        const char *shortname = "???";
-        switch ((EKFType)state.active_EKF) {
-#if AP_AHRS_DCM_ENABLED
-        case EKFType::DCM:
-            shortname = "DCM";
-            break;
-#endif
-#if AP_AHRS_SIM_ENABLED
-        case EKFType::SIM:
-            shortname = "SIM";
-            break;
-#endif
-#if AP_AHRS_EXTERNAL_ENABLED
-        case EKFType::EXTERNAL:
-            shortname = "External";
-            break;
-#endif
-#if HAL_NAVEKF3_AVAILABLE
-        case EKFType::THREE:
-            shortname = "EKF3";
-            break;
-#endif
-#if HAL_NAVEKF2_AVAILABLE
-        case EKFType::TWO:
-            shortname = "EKF2";
-            break;
-#endif
-        }
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AHRS: %s active", shortname);
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AHRS: %s active",
+                      ekf_type_shortname((EKFType)state.active_EKF));
     }
 #endif // HAL_GCS_ENABLED
 
@@ -3404,6 +3377,49 @@ uint8_t AP_AHRS::_get_primary_IMU_index() const
         imu = AP::ins().get_first_usable_gyro();
     }
     return imu;
+}
+
+const char *AP_AHRS::ekf_type_shortname(EKFType type)
+{
+    switch (type) {
+#if AP_AHRS_DCM_ENABLED
+    case EKFType::DCM:
+        return "DCM";
+#endif
+#if AP_AHRS_SIM_ENABLED
+    case EKFType::SIM:
+        return "SIM";
+#endif
+#if AP_AHRS_EXTERNAL_ENABLED
+    case EKFType::EXTERNAL:
+        return "External";
+#endif
+#if HAL_NAVEKF3_AVAILABLE
+    case EKFType::THREE:
+        return "EKF3";
+#endif
+#if HAL_NAVEKF2_AVAILABLE
+    case EKFType::TWO:
+        return "EKF2";
+#endif
+    }
+    return "???";
+}
+
+void AP_AHRS::get_primary_estimator_name(char *buf, uint8_t buflen) const
+{
+    const EKFType active = active_EKF_type();
+#if HAL_NAVEKF3_AVAILABLE
+    const int8_t primary = get_primary_core_index();
+    if ((active == EKFType::THREE) && (primary >= 0)) {
+        hal.util->snprintf(buf, buflen, "L%u/%s",
+                           (unsigned)primary, EKF3.lane_label(uint8_t(primary)));
+        return;
+    }
+#endif
+    // Not flying on an EKF3 lane, so there is no lane to name: DCM, an external AHRS, or no
+    // primary selected. Naming the backend beats printing a lane that is not steering.
+    hal.util->snprintf(buf, buflen, "%s", ekf_type_shortname(active));
 }
 
 // return the index of the primary core or -1 if no primary core selected
