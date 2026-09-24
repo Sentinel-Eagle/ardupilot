@@ -565,6 +565,15 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("WIND_PSCALE", 31, NavEKF3, _wndVarHgtRateScale, 1.0f),
 
+    // @Param: WIND_MAX
+    // @DisplayName: Maximum wind speed
+    // @Description: Upper bound on the magnitude of the horizontal wind state. A lane aided only by a noisy position source can otherwise "move" a velocity error into wind estimation, which affects attitude. Set it to what the aircraft can fly against, typically AIRSPEED_MAX. 0 disables the bound.
+    // @Range: 0 50
+    // @Increment: 1
+    // @User: Advanced
+    // @Units: m/s
+    AP_GROUPINFO("WIND_MAX", 59, NavEKF3, _windMax, 0.0f),
+
     // @Param: GPS_CHECK
     // @DisplayName: GPS preflight check
     // @Description: This is a 1 byte bitmap controlling which GPS preflight checks are performed. Set to 0 to bypass all checks. Set to 255 perform all checks. Set to 3 to check just the number of satellites and HDoP. Set to 31 for the most rigorous checks that will still allow checks to pass when the copter is moving, eg launch from a boat.
@@ -792,7 +801,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @RebootRequired: True
     AP_GROUPINFO("GSF_USE_MASK", 58, NavEKF3, _gsfUseMask, 3),
 
-    // 59 was GSF_DELAY which was never released in a stable version
+    // 59 was GSF_DELAY which was never released in a stable version, it is now WIND_MAX (declared next to WIND_PSCALE)
 
     // @Param: GSF_RST_MAX
     // @DisplayName: Maximum number of resets to the EKF-GSF yaw estimate allowed

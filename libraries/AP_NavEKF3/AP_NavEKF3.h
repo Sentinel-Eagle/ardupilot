@@ -422,6 +422,7 @@ private:
     AP_Float _easNoise;             // equivalent airspeed measurement noise : m/s
     AP_Float _windVelProcessNoise;  // wind velocity state process noise : m/s^2
     AP_Float _wndVarHgtRateScale;   // scale factor applied to wind process noise due to height rate
+    AP_Float _windMax;              // upper bound on the horizontal wind state magnitude : m/s (0 = no bound)
     AP_Float _magEarthProcessNoise; // Earth magnetic field process noise : gauss/sec
     AP_Float _magBodyProcessNoise;  // Body magnetic field process noise : gauss/sec
     AP_Float _gyrNoise;             // gyro process noise : rad/s

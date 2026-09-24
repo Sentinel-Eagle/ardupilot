@@ -212,7 +212,7 @@ public:
     // Maximum NE position state variance above which a lane is
     // considered ineligible as primary. Our ext-nav has variance that depends
     // on altitude, so this gets appropriately scaled.
-    static constexpr float LANE_POS_VAR_THRESHOLD_BASE = 20.0f;
+    static constexpr float LANE_POS_VAR_THRESHOLD_BASE = 80.0f;
     static constexpr float LANE_POS_VAR_THRESHOLD_REF_ALT_M = 120.0f;
     float lane_pos_var_threshold(void) const;
 

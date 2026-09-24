@@ -2207,6 +2207,13 @@ void NavEKF3_core::ConstrainStates()
     for (uint8_t i=7; i<=8; i++) statesArray[i] = constrain_ftype(statesArray[i],-EK3_POSXY_STATE_LIMIT,EK3_POSXY_STATE_LIMIT);
     // height limit covers home alt on everest through to home alt at SL and balloon drop
     stateStruct.position.z = constrain_ftype(stateStruct.position.z,-4.0e4f,1.0e4f);
+    // horizontal wind magnitude limit (EK3_WIND_MAX).
+    if (frontend->_windMax > 0.0f) {
+        const ftype windMag = stateStruct.wind_vel.length();
+        if (windMag > frontend->_windMax) {
+            stateStruct.wind_vel *= ftype(frontend->_windMax) / windMag;
+        }
+    }
     // gyro bias limit (this needs to be set based on manufacturers specs)
     for (uint8_t i=10; i<=12; i++) statesArray[i] = constrain_ftype(statesArray[i],-GYRO_BIAS_LIMIT*dtEkfAvg,GYRO_BIAS_LIMIT*dtEkfAvg);
     // the accelerometer bias limit is controlled by a user adjustable parameter
