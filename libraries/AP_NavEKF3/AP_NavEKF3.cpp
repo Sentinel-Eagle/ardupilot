@@ -1179,16 +1179,17 @@ void NavEKF3::UpdateFilter(void)
             coreDcmAttAcceptSince_ms[i].reset();
         }
 
-        // A position reset re-seeds the position covariance, so a small P right
-        // after a reset is no evidence of a stable estimate (GPS resets seed P
-        // well below lane_pos_var_threshold while the position may have jumped
-        // onto a bad fix). Restart the stability window so a freshly-reset lane
-        // must prove itself for the full window before it can be switched to.
-        Vector2f posResetDelta;
-        const uint32_t lastPosResetTime_ms = core[i].getLastPosNorthEastReset(posResetDelta);
-        if (lastPosResetTime_ms != 0 &&
+        // A position reset that re-seeds the position covariance leaves a small P that is no
+        // evidence of a stable estimate (GPS resets seed P well below lane_pos_var_threshold
+        // while the position may have jumped onto a bad fix, and a glitch reposition seeds a
+        // fixed value). Restart the stability window so such a lane must prove itself for the
+        // full window before it can be switched to. Resets that only translate the states, such
+        // as an ext-nav reset_counter change or the position copy at a lane switch, leave P as it
+        // was and are deliberately not counted, so that it's possible to do position resets often.
+        const uint32_t lastPosCovResetTime_ms = core[i].getLastPosCovarianceReset();
+        if (lastPosCovResetTime_ms != 0 &&
             corePosVarAcceptSince_ms[i].has_value() &&
-            lastPosResetTime_ms >= *corePosVarAcceptSince_ms[i]) {
+            lastPosCovResetTime_ms >= *corePosVarAcceptSince_ms[i]) {
             corePosVarAcceptSince_ms[i].reset();
         }
     }

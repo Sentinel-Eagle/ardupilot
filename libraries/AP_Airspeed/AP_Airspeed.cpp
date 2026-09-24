@@ -137,7 +137,7 @@ const AP_Param::GroupInfo AP_Airspeed::var_info[] = {
 
     // @Param: _WIND_MAX
     // @DisplayName: Maximum airspeed and ground speed difference
-    // @Description: If the difference between airspeed and ground speed is greater than this value the sensor will be marked unhealthy. Using ARSPD_OPTIONS this health value can be used to disable the sensor.
+    // @Description: If the difference between airspeed and ground speed of the active EKF lane is greater than this value the sensor will be marked unhealthy. Using ARSPD_OPTIONS this health value can be used to disable the sensor.
     // @Description{Copter, Blimp, Rover, Sub}: This parameter and function is not used by this vehicle. Always set to 0.
     // @Units: m/s
     // @User: Advanced
@@ -145,7 +145,7 @@ const AP_Param::GroupInfo AP_Airspeed::var_info[] = {
 
     // @Param: _WIND_WARN
     // @DisplayName: Airspeed and GPS speed difference that gives a warning
-    // @Description: If the difference between airspeed and GPS speed is greater than this value the sensor will issue a warning. If 0 ARSPD_WIND_MAX is used.
+    // @Description: If the difference between airspeed and ground speed of the active EKF lane is greater than this value the sensor will issue a warning. If 0 ARSPD_WIND_MAX is used.
     // @Description{Copter, Blimp, Rover, Sub}: This parameter and function is not used by this vehicle. Always set to 0.
     // @Units: m/s
     // @User: Advanced

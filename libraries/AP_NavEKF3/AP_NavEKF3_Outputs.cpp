@@ -205,6 +205,13 @@ uint32_t NavEKF3_core::getLastPosNorthEastReset(Vector2f &pos) const
     return lastPosReset_ms;
 }
 
+// Return the time of the last position reset that re-seeded the position covariance.
+// Returns 0 if no such reset has ever occurred.
+uint32_t NavEKF3_core::getLastPosCovarianceReset(void) const
+{
+    return lastPosCovReset_ms;
+}
+
 // return the amount of vertical position change due to the last vertical position reset in metres
 // returns the time of the last reset or 0 if no reset has ever occurred
 uint32_t NavEKF3_core::getLastPosDownReset(float &posD) const
