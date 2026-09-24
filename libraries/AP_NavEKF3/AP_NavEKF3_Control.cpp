@@ -829,7 +829,8 @@ float NavEKF3_core::lane_pos_var_threshold(void) const
 {
     const float alt_m = MAX(-stateStruct.position.z, 0.0f);
     const float scale = sq(alt_m / LANE_POS_VAR_THRESHOLD_REF_ALT_M);
-    return MAX(LANE_POS_VAR_THRESHOLD_BASE, LANE_POS_VAR_THRESHOLD_BASE * scale);
+    const float base = frontend->_lanePosVarBase;
+    return MAX(base, base * scale);
 }
 
 bool NavEKF3_core::configured_sources_ready(char *failure_msg, uint8_t failure_msg_len) const

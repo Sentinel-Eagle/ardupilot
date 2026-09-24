@@ -536,7 +536,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Units: rad/s/s
     AP_GROUPINFO("GBIAS_P_NSE", 26, NavEKF3, _gyroBiasProcessNoise, GBIAS_P_NSE_DEFAULT),
 
-    // 27 previously used for EK2_GSCL_P_NSE parameter that has been removed
+    // 27 previously used for EK2_GSCL_P_NSE parameter that has been removed, it is now EXTNAV_PVAR (declared next to WIND_MAX)
 
     // @Param: ABIAS_P_NSE
     // @DisplayName: Accelerometer bias stability (m/s^3)
@@ -546,7 +546,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Units: m/s/s/s
     AP_GROUPINFO("ABIAS_P_NSE", 28, NavEKF3, _accelBiasProcessNoise, ABIAS_P_NSE_DEFAULT),
 
-    // 29 previously used for EK2_MAG_P_NSE parameter that has been replaced with EK3_MAGE_P_NSE and EK3_MAGB_P_NSE
+    // 29 previously used for EK2_MAG_P_NSE parameter that has been replaced with EK3_MAGE_P_NSE and EK3_MAGB_P_NSE, it is now EXTNAV_IGATE (declared next to WIND_MAX)
 
     // @Param: WIND_P_NSE
     // @DisplayName: Wind velocity process noise (m/s^2)
@@ -573,6 +573,23 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @User: Advanced
     // @Units: m/s
     AP_GROUPINFO("WIND_MAX", 59, NavEKF3, _windMax, 0.0f),
+
+    // @Param: EXTNAV_IGATE
+    // @DisplayName: External nav position innovation gate size
+    // @Description: This sets the percentage number of standard deviations applied to the external nav position measurement innovation consistency check. EK3_POS_I_GATE keeps gating GPS and the other position sources.
+    // @Range: 100 1000
+    // @Increment: 25
+    // @User: Advanced
+    AP_GROUPINFO("EXTNAV_IGATE", 29, NavEKF3, _extNavPosInnovGate, 300),
+
+    // @Param: EXTNAV_PVAR
+    // @DisplayName: Lane position variance eligibility threshold
+    // @Description: NE position state variance (P[7][7]+P[8][8]) above which a lane is not eligible as primary, at 120 m above origin. It is scaled with (height/120)^2 above that, matching how a vision based position source's error grows with height.
+    // @Range: 1 1000
+    // @Increment: 5
+    // @Units: m^2
+    // @User: Advanced
+    AP_GROUPINFO("EXTNAV_PVAR", 27, NavEKF3, _lanePosVarBase, 80.0f),
 
     // @Param: GPS_CHECK
     // @DisplayName: GPS preflight check

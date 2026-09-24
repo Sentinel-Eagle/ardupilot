@@ -209,10 +209,8 @@ public:
     // horizontal position source currently in use by this lane (posxy_source() itself is private)
     AP_NavEKF_Source::SourceXY get_posxy_source(void) const { return posxy_source(); }
 
-    // Maximum NE position state variance above which a lane is
-    // considered ineligible as primary. Our ext-nav has variance that depends
-    // on altitude, so this gets appropriately scaled.
-    static constexpr float LANE_POS_VAR_THRESHOLD_BASE = 80.0f;
+    // Maximum NE position state variance above which a lane is considered ineligible as
+    // primary is EK3_EXTNAV_PVAR at this reference altitude, scaled with (height / reference)^2.
     static constexpr float LANE_POS_VAR_THRESHOLD_REF_ALT_M = 120.0f;
     float lane_pos_var_threshold(void) const;
 

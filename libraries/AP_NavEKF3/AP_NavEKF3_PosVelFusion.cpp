@@ -848,7 +848,9 @@ void NavEKF3_core::FuseVelPosNED()
             // Don't allow test to fail if not navigating and using a constant position
             // assumption to constrain tilt errors because innovations can become large
             // due to vehicle motion.
-            ftype maxPosInnov2 = sq(MAX(0.01 * (ftype)frontend->_gpsPosInnovGate, 1.0))*(varInnovVelPos[3] + varInnovVelPos[4]);
+            // External nav position has its own gate (EK3_EXTNAV_IGATE), the other sources keep EK3_POS_I_GATE.
+            const int16_t posInnovGate = extNavUsedForPos ? frontend->_extNavPosInnovGate : frontend->_gpsPosInnovGate;
+            ftype maxPosInnov2 = sq(MAX(0.01 * (ftype)posInnovGate, 1.0))*(varInnovVelPos[3] + varInnovVelPos[4]);
 
             posTestRatio = (sq(innovVelPos[3]) + sq(innovVelPos[4])) / maxPosInnov2;
             bool posCheckPassed = false; // boolean true if position measurements have passed innovation consistency check

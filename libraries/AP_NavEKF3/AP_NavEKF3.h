@@ -423,6 +423,8 @@ private:
     AP_Float _windVelProcessNoise;  // wind velocity state process noise : m/s^2
     AP_Float _wndVarHgtRateScale;   // scale factor applied to wind process noise due to height rate
     AP_Float _windMax;              // upper bound on the horizontal wind state magnitude : m/s (0 = no bound)
+    AP_Int16 _extNavPosInnovGate;   // Percentage number of standard deviations applied to external nav position innovation consistency check
+    AP_Float _lanePosVarBase;       // lane eligibility threshold on the NE position variance at the reference altitude : m^2
     AP_Float _magEarthProcessNoise; // Earth magnetic field process noise : gauss/sec
     AP_Float _magBodyProcessNoise;  // Body magnetic field process noise : gauss/sec
     AP_Float _gyrNoise;             // gyro process noise : rad/s
