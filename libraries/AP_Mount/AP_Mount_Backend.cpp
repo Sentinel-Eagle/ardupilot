@@ -366,6 +366,7 @@ void AP_Mount_Backend::update_poi_adjustment()
     get_rc_input(roll_in, pitch_in, yaw_in);
     (void)roll_in;
 
+    // Dead zone is already applied 
     const bool input_active = !is_zero(pitch_in) || !is_zero(yaw_in);
     const uint32_t now_ms = AP_HAL::millis();
 
