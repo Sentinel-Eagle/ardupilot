@@ -425,6 +425,7 @@ private:
     AP_Float _windMax;              // upper bound on the horizontal wind state magnitude : m/s (0 = no bound)
     AP_Int16 _extNavPosInnovGate;   // Percentage number of standard deviations applied to external nav position innovation consistency check
     AP_Float _lanePosVarBase;       // lane eligibility threshold on the NE position variance at the reference altitude : m^2
+    AP_Float _extNavVelMinVar;      // minimum NE velocity state variance per axis on a lane aided only by ext-nav position : (m/s)^2
     AP_Float _magEarthProcessNoise; // Earth magnetic field process noise : gauss/sec
     AP_Float _magBodyProcessNoise;  // Body magnetic field process noise : gauss/sec
     AP_Float _gyrNoise;             // gyro process noise : rad/s

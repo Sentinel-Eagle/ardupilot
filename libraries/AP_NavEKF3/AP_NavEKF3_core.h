@@ -84,11 +84,6 @@
 #define VEL_STATE_MIN_VARIANCE 1E-4
 #define POS_STATE_MIN_VARIANCE 1E-4
 
-// Minimum NE velocity variance for a lane aided only by ext-nav position. Such a lane observes velocity solely
-// through the growth of position innovations. Left alone its velocity variance collapses to ~0.1 (m/s)^2 per axis
-// while its real error is bigger. We try to correct it.
-#define EXTNAV_POS_ONLY_VEL_MIN_VARIANCE 1.0f
-
 // A position-only ext-nav lane that has rejected every fix for this long is not eligible as primary, whatever its
 // position variance says. With the variance threshold below, P needs 3-6 s of rejection to cross it.
 // Re-selection is still debounced by the 5 s stability window.

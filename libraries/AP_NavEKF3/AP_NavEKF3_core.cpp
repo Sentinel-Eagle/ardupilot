@@ -2053,11 +2053,11 @@ void NavEKF3_core::ConstrainVariances()
     // +----------------------------------------------------------------------------------------------+
 
     for (uint8_t i=0; i<=3; i++) P[i][i] = constrain_ftype(P[i][i],0.0,1.0); // attitude error
-    // NE velocity. A lane aided only by ext-nav position gets a much higher floor, see EXTNAV_POS_ONLY_VEL_MIN_VARIANCE.
+    // NE velocity. A lane aided only by ext-nav position gets a much higher floor, see EK3_EXTNAV_VVAR.
     ftype velMinVariance = VEL_STATE_MIN_VARIANCE;
 #if EK3_FEATURE_EXTERNAL_NAV
     if (posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV && !uses_velxy_source(AP_NavEKF_Source::SourceXY::EXTNAV)) {
-        velMinVariance = EXTNAV_POS_ONLY_VEL_MIN_VARIANCE;
+        velMinVariance = ftype(frontend->_extNavVelMinVar.get());
     }
 #endif
     for (uint8_t i=4; i<=5; i++) P[i][i] = constrain_ftype(P[i][i], velMinVariance, 1.0e3);

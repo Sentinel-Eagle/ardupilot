@@ -370,7 +370,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Units: m
     AP_GROUPINFO("GLITCH_RAD", 7, NavEKF3, _gpsGlitchRadiusMax, GLITCH_RADIUS_DEFAULT),
 
-    // 8 previously used for EKF3_GPS_DELAY parameter that has been deprecated.
+    // 8 previously used for EKF3_GPS_DELAY parameter that has been deprecated, it is now EXTNAV_VVAR (declared next to WIND_MAX).
     // The EKF now takes its GPS delay form the GPS library with the default delays
     // specified by the GPS_DELAY and GPS_DELAY2 parameters.
 
@@ -590,6 +590,15 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Units: m^2
     // @User: Advanced
     AP_GROUPINFO("EXTNAV_PVAR", 27, NavEKF3, _lanePosVarBase, 80.0f),
+
+    // @Param: EXTNAV_VVAR
+    // @DisplayName: External nav position-only lane velocity variance floor
+    // @Description: Minimum NE velocity state variance, per axis, of a lane whose horizontal position comes from external nav and which has no velocity source.
+    // @Range: 0.0001 10
+    // @Increment: 0.1
+    // @Units: m^2/s^2
+    // @User: Advanced
+    AP_GROUPINFO("EXTNAV_VVAR", 8, NavEKF3, _extNavVelMinVar, 1.0f),
 
     // @Param: GPS_CHECK
     // @DisplayName: GPS preflight check
