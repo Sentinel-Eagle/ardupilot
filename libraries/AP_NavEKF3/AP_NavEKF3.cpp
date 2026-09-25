@@ -1221,10 +1221,10 @@ void NavEKF3::UpdateFilter(void)
         // full window before it can be switched to. Resets that only translate the states, such
         // as an ext-nav reset_counter change or the position copy at a lane switch, leave P as it
         // was and are deliberately not counted, so that it's possible to do position resets often.
-        const uint32_t lastPosCovResetTime_ms = core[i].getLastPosCovarianceReset();
-        if (lastPosCovResetTime_ms != 0 &&
+        const std::optional<uint32_t> lastPosCovReset_ms = core[i].getLastPosCovarianceReset();
+        if (lastPosCovReset_ms.has_value() &&
             corePosVarAcceptSince_ms[i].has_value() &&
-            lastPosCovResetTime_ms >= *corePosVarAcceptSince_ms[i]) {
+            *lastPosCovReset_ms >= *corePosVarAcceptSince_ms[i]) {
             corePosVarAcceptSince_ms[i].reset();
         }
     }

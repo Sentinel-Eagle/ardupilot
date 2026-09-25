@@ -371,7 +371,7 @@ void NavEKF3_core::InitialiseVariables()
     timeTasReceived_ms = 0;
     lastPreAlignGpsCheckTime_ms = imuSampleTime_ms;
     lastPosReset_ms = 0;
-    lastPosCovReset_ms = 0;
+    lastPosCovReset_ms.reset();
     posResetVetoStart_ms = 0;
     posResetVetoLast_ms = 0;
     lastVelReset_ms = 0;
