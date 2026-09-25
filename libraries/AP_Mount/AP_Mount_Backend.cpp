@@ -15,6 +15,11 @@ extern const AP_HAL::HAL& hal;
 #define AP_MOUNT_POI_REQUEST_TIMEOUT_MS 30000   // POI calculations continue to be updated for this many seconds after last request
 #define AP_MOUNT_POI_RESULT_TIMEOUT_MS  3000    // POI calculations valid for 3 seconds
 #define AP_MOUNT_POI_DIST_M_MAX         10000   // POI calculations limit of 10,000m (10km)
+#define AP_MOUNT_POI_PLANE_DIST_M_MAX   5000    // POI intersections with an altitude plane are limited to 5,000m
+#define AP_MOUNT_POI_PLANE_MIN_DOWN_DEG 1.0     // line-of-sight must be at least this far below the horizon to hit a plane below us
+#define AP_MOUNT_POI_ADJUSTMENT_IDLE_MS   500   // report the adjusted POI once pitch and yaw have been idle this long
+#define AP_MOUNT_POI_ADJUSTMENT_WARN_MS  3000   // minimum interval between "adjustment limited" warnings
+#define AP_MOUNT_POI_ADJUSTMENT_RATE_DEGS  30   // POI adjustment rate used when MNTx_RC_RATE is zero
 
 // Default init function for every mount
 void AP_Mount_Backend::init()
@@ -96,6 +101,11 @@ bool AP_Mount_Backend::set_mode(MAV_MOUNT_MODE mode)
     if (!valid_mode(mode)) {
         return false;
     }
+#if AP_MOUNT_POI_LOCK_ENABLED
+    if (mode != MAV_MOUNT_MODE_GPS_POINT) {
+        reset_poi_adjustment();
+    }
+#endif
     _mode = mode;
     return true;
 }
@@ -235,6 +245,10 @@ void AP_Mount_Backend::set_rate_target(float roll_degs, float pitch_degs, float 
 // set_roi_target - sets target location that mount should attempt to point towards
 void AP_Mount_Backend::set_roi_target(const Location &target_loc)
 {
+#if AP_MOUNT_POI_LOCK_ENABLED
+    reset_poi_adjustment();
+#endif
+
     // set the target gps location
     _roi_target = target_loc;
 
@@ -251,16 +265,14 @@ void AP_Mount_Backend::set_roi_target(const Location &target_loc)
 // set poi_lock - switch to GPS Targeting mode using current gimbal view's GPS point or save poi location as target
 void AP_Mount_Backend::set_poi_lock()
 {
+    reset_poi_adjustment();
     saved_mount_mode = get_mode(); //save current mount mode for the suspend_poi_lock
     if (!roi_is_set()) {
         mnt_target.poi_start_ms = AP_HAL::millis();
         mnt_target.pointing_at_poi_at_home_alt = false;
     } else {  // there is a poi target, just turn POI tracking back on
         set_mode(MAV_MOUNT_MODE_GPS_POINT);
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
-                      _roi_target.lat * 1.0e-7,
-                      _roi_target.lng * 1.0e-7,
-                      _roi_target.alt * 0.01);
+        send_poi_location(_roi_target);
         mnt_target.poi_start_ms = 0;
     }
 }
@@ -268,13 +280,14 @@ void AP_Mount_Backend::set_poi_lock()
 // clear poi_lock - clear POI location and revert to default mode
 void AP_Mount_Backend::clear_poi_lock()
 {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: Cleared");
-        clear_roi_target();
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: Cleared");
+    clear_roi_target();
 }
 
 // suspend_poi_lock - revert to saved targeting mode, if it exists and POI target exists, otherwise do nothing
 void AP_Mount_Backend::suspend_poi_lock()
 {
+    reset_poi_adjustment();
     if (roi_is_set() && saved_mount_mode != MAV_MOUNT_MODE_ENUM_END) {
         set_mode(saved_mount_mode);    // set back to mode before GPS_POINT if its been set by switch going HIGH
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: Revert mode,target saved");;
@@ -291,12 +304,9 @@ void AP_Mount_Backend::update_poi_lock_target()
     Location target_location;
 
     if (!mnt_target.pointing_at_poi_at_home_alt) {
-        if (calculate_poi_at_home_alt(target_location)) {
+        if (calculate_poi_at_altitude(AP::ahrs().get_home(), target_location)) {
             set_roi_target(target_location);
-            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
-                          target_location.lat * 1.0e-7,
-                          target_location.lng * 1.0e-7,
-                          target_location.alt * 0.01);
+            send_poi_location(target_location);
         }
         // attempt the home-alt POI only once per switch engagement; retrying would repeat warnings at the update rate
         mnt_target.pointing_at_poi_at_home_alt = true;
@@ -327,10 +337,7 @@ void AP_Mount_Backend::update_poi_lock_target()
     // if that fails, give warning
     if (get_poi(_instance, quat, vehicle_location, target_location)) {
         set_roi_target(target_location);
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
-                      target_location.lat * 1.0e-7,
-                      target_location.lng * 1.0e-7,
-                      target_location.alt * 0.01);
+        send_poi_location(target_location);
         mnt_target.poi_start_ms = 0;
     } else if (AP_HAL::millis() - mnt_target.poi_start_ms > 5000) {
     //stop terrain-based POI calculation
@@ -340,6 +347,110 @@ void AP_Mount_Backend::update_poi_lock_target()
     // terrain-based POI is not available so the home-alt POI stands
     mnt_target.poi_start_ms = 0;
 #endif // AP_MOUNT_POI_TO_LATLONALT_ENABLED
+}
+
+// Move the locked POI across the ground in response to pilot pitch and yaw input.
+//
+// The POI Location is the only state this keeps: every cycle the line-of-sight to it is recomputed
+// from the vehicle's current position, the pilot's input is added to that line-of-sight and the
+// result is intersected with the ground again.  Nothing here reads the gimbal's measured attitude,
+// so the stored POI always describes exactly the angles being commanded.  That is what stops the
+// gimbal drifting back: the earlier implementation derived the new POI from where the gimbal had
+// physically managed to get to, which lags the command by the gimbal's own response time, so every
+// release of the sticks threw away that much of the movement and a short nudge was lost entirely.
+void AP_Mount_Backend::update_poi_adjustment()
+{
+    float roll_in;
+    float pitch_in;
+    float yaw_in;
+    get_rc_input(roll_in, pitch_in, yaw_in);
+    (void)roll_in;
+
+    // Dead zone is already applied 
+    const bool input_active = !is_zero(pitch_in) || !is_zero(yaw_in);
+    const uint32_t now_ms = AP_HAL::millis();
+
+    if (!poi_adjustment.active) {
+        if (!input_active) {
+            return;
+        }
+        // Hold the POI on the plane it already sits on for the whole adjustment.  Re-deriving the
+        // altitude part way through (from terrain, say) would re-aim the gimbal mid-movement.
+        if (!_roi_target.get_alt_cm(Location::AltFrame::ABSOLUTE, poi_adjustment.plane_alt_cm)) {
+            return;
+        }
+        poi_adjustment.active = true;
+        poi_adjustment.last_warn_ms = 0;
+    }
+
+    if (input_active) {
+        // held even when the projection below cannot run, so that losing the vehicle position
+        // mid-adjustment pauses it rather than ending it
+        poi_adjustment.last_input_ms = now_ms;
+    }
+
+    Location cur_loc;
+    MountAngleTarget angle_rad;
+    if (input_active && get_vehicle_location(cur_loc) && get_angle_target_to_roi(angle_rad)) {
+        // scaled by zoom for the same reason pilot rate input is: the pilot is aiming by what the
+        // image does, and a narrow field of view turns a small angular step into a large one there
+        const float rate_rads = radians(_params.rc_rate_max > 0 ? _params.rc_rate_max.get() : AP_MOUNT_POI_ADJUSTMENT_RATE_DEGS) * get_rc_rate_scale();
+        const float pitch_rad = constrain_float(angle_rad.pitch + pitch_in * rate_rads * AP_MOUNT_UPDATE_DT,
+                                                radians(_params.pitch_angle_min.get()),
+                                                radians(_params.pitch_angle_max.get()));
+        float yaw_ef_rad = wrap_PI(angle_rad.get_ef_yaw() + yaw_in * rate_rads * AP_MOUNT_UPDATE_DT);
+        if (_params.yaw_angle_max - _params.yaw_angle_min < 360) {
+            // Keep the POI inside the yaw range the gimbal can reach, otherwise the POI walks past
+            // the mechanical limit while the gimbal stands still and ends up somewhere unviewable.
+            yaw_ef_rad = wrap_PI(constrain_float(wrap_PI(yaw_ef_rad - get_vehicle_yaw_rad()),
+                                                 radians(_params.yaw_angle_min.get()),
+                                                 radians(_params.yaw_angle_max.get())) + get_vehicle_yaw_rad());
+        }
+
+        Location adjusted_target;
+        const char *limit_reason = nullptr;
+        switch (project_los_to_altitude(cur_loc, poi_adjustment.plane_alt_cm, pitch_rad, yaw_ef_rad, adjusted_target)) {
+        case PoiProjection::OK:
+            // assigned directly because set_roi_target() would restart this adjustment
+            _roi_target = adjusted_target;
+            break;
+        case PoiProjection::NO_ALTITUDE:
+            break;
+        case PoiProjection::TOO_ELEVATED:
+            limit_reason = "horizon";
+            break;
+        case PoiProjection::TOO_FAR:
+            limit_reason = "range";
+            break;
+        }
+
+        // at a limit the POI simply stops moving, but say so rather than leaving the pilot guessing
+        if ((limit_reason != nullptr) && (now_ms - poi_adjustment.last_warn_ms > AP_MOUNT_POI_ADJUSTMENT_WARN_MS)) {
+            poi_adjustment.last_warn_ms = now_ms;
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: adjustment limited by %s", limit_reason);
+        }
+    }
+
+    if (now_ms - poi_adjustment.last_input_ms < AP_MOUNT_POI_ADJUSTMENT_IDLE_MS) {
+        return;
+    }
+
+    // report the result once per adjustment rather than once per nudge
+    reset_poi_adjustment();
+    send_poi_location(_roi_target);
+}
+
+void AP_Mount_Backend::reset_poi_adjustment()
+{
+    poi_adjustment = {};
+}
+
+void AP_Mount_Backend::send_poi_location(const Location &target_location) const
+{
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: %.7f,%.7f %.1fm AMSL",
+                  target_location.lat * 1.0e-7,
+                  target_location.lng * 1.0e-7,
+                  target_location.alt * 0.01);
 }
 
 #endif // AP_MOUNT_POI_LOCK_ENABLED
@@ -391,6 +502,10 @@ void AP_Mount_Backend::set_yaw_lock(bool yaw_lock)
 // clear_roi_target - clears target location that mount should attempt to point towards
 void AP_Mount_Backend::clear_roi_target()
 {
+#if AP_MOUNT_POI_LOCK_ENABLED
+    reset_poi_adjustment();
+#endif
+
     // clear the target GPS location
     _roi_target.zero();
 
@@ -664,7 +779,11 @@ void AP_Mount_Backend::write_log(uint64_t timestamp_us)
     float target_pitch = nanf;
     float target_yaw = nanf;
     bool target_yaw_is_ef = false;
-    if (mnt_target.target_type == MountTargetType::ANGLE) {
+    // A LOCATION target is converted to angles for gimbals that cannot take a location, and those
+    // angles are what was actually commanded.  Log them as well, otherwise a POI-locked gimbal logs
+    // no desired angles at all and its tracking error cannot be seen.
+    if ((mnt_target.target_type == MountTargetType::ANGLE) ||
+        ((mnt_target.target_type == MountTargetType::LOCATION) && !natively_supports(MountTargetType::LOCATION))) {
         target_roll = degrees(mnt_target.angle_rad.roll);
         target_pitch = degrees(mnt_target.angle_rad.pitch);
         target_yaw = degrees(mnt_target.angle_rad.yaw);
@@ -815,100 +934,97 @@ void AP_Mount_Backend::calculate_poi()
 #endif // AP_MOUNT_POI_TO_LATLONALT_ENABLED
 
 #if AP_MOUNT_POI_LOCK_ENABLED
-// calculate location gimbal is pointing, at HOME altitude. Used if Terrain is not avaialble
-bool AP_Mount_Backend::calculate_poi_at_home_alt(Location &target_location)
+// Intersect the line-of-sight leaving from_loc with the horizontal plane at plane_alt_cm (AMSL).
+// Pure geometry: the caller decides where the line-of-sight comes from, which lets the POI
+// adjustment project the angles it is commanding rather than the angles the gimbal has reached.
+AP_Mount_Backend::PoiProjection AP_Mount_Backend::project_los_to_altitude(const Location &from_loc,
+                                                                         int32_t plane_alt_cm,
+                                                                         float pitch_rad,
+                                                                         float yaw_ef_rad,
+                                                                         Location &target_location) const
 {
-    AP_AHRS &ahrs = AP::ahrs();
+    int32_t from_alt_cm;
+    if (!from_loc.get_alt_cm(Location::AltFrame::ABSOLUTE, from_alt_cm)) {
+        return PoiProjection::NO_ALTITUDE;
+    }
 
-    // current location
+    // the plane in local NED (origin at from_loc), with down positive
+    const float plane_down_m = (from_alt_cm - plane_alt_cm) * 0.01f;
+
+    // unit line-of-sight in earth NED built from earth-frame yaw and pitch, which avoids the frame
+    // ambiguity of going via a quaternion.  NED: x=north, y=east, z=down, so a nose-down (negative)
+    // pitch gives a positive z.
+    const float cos_pitch = cosf(pitch_rad);
+    const Vector3f los_ned{cos_pitch * cosf(yaw_ef_rad), cos_pitch * sinf(yaw_ef_rad), -sinf(pitch_rad)};
+
+    // when above the plane the line-of-sight must be clearly below the horizon, which also rejects
+    // the near-parallel geometry that would otherwise produce an intersection kilometers away
+    if (is_positive(plane_down_m) && los_ned.z < sinf(radians(AP_MOUNT_POI_PLANE_MIN_DOWN_DEG))) {
+        return PoiProjection::TOO_ELEVATED;
+    }
+    if (is_zero(los_ned.z)) {
+        return PoiProjection::TOO_ELEVATED;
+    }
+
+    // Distance along the line-of-sight to the plane.  A non-positive result means the plane lies
+    // behind us, which is what looking down from below it gives; mirror ourselves to the far side
+    // of the plane so that a point ahead of the vehicle is still chosen.
+    float dist_m = plane_down_m / los_ned.z;
+    if (!is_positive(dist_m)) {
+        dist_m = -plane_down_m / los_ned.z;
+    }
+    if (!is_positive(dist_m)) {
+        return PoiProjection::TOO_ELEVATED;
+    }
+
+    const float north_m = los_ned.x * dist_m;
+    const float east_m = los_ned.y * dist_m;
+    if (norm(north_m, east_m) > AP_MOUNT_POI_PLANE_DIST_M_MAX) {
+        return PoiProjection::TOO_FAR;
+    }
+
+    target_location = from_loc;
+    target_location.offset(north_m, east_m);
+    target_location.set_alt_cm(plane_alt_cm, Location::AltFrame::ABSOLUTE);
+    return PoiProjection::OK;
+}
+
+// calculate location gimbal is pointing at a specified altitude
+bool AP_Mount_Backend::calculate_poi_at_altitude(const Location &altitude_location, Location &target_location)
+{
     Location cur_loc;
     if (!get_vehicle_location(cur_loc)) {
         return false;
     }
 
-    // home location/alt
-    const Location &home = ahrs.get_home();
-    const float cur_alt_m  = cur_loc.alt * 0.01f;   // cm -> m
-    const float home_alt_m = home.alt    * 0.01f;   // cm -> m
+    int32_t plane_alt_cm;
+    if (!altitude_location.get_alt_cm(Location::AltFrame::ABSOLUTE, plane_alt_cm)) {
+        return false;
+    }
 
-    // Plane at HOME altitude in local NED (origin at vehicle):
-    // down_of_home_plane = cur_alt - home_alt  (NED down positive)
-    // Above home => target_down_m > 0 (home plane is below us)
-    // Below home => target_down_m < 0 (home plane is above us)
-    const float target_down_m = (cur_alt_m - home_alt_m);
-
-    // mount attitude quaternion
     Quaternion quat;
     if (!get_attitude_quaternion(quat)) {
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: Failure to mount angles");
         return false;
     }
 
-    // Extract mount euler from quat (AP convention: quat yaw is body-frame; add vehicle yaw for earth-frame yaw)
-    float m_roll_rad;
-    float m_pitch_rad;
-    float m_yaw_body_rad;
-    quat.to_euler(m_roll_rad, m_pitch_rad, m_yaw_body_rad);
+    // AP convention: the quaternion's yaw is body-frame, so add the vehicle's yaw for earth-frame
+    const float pitch_rad = quat.get_euler_pitch();
+    const float yaw_ef_rad = wrap_PI(quat.get_euler_yaw() + get_vehicle_yaw_rad());
 
-    const float body_yaw_earth_rad = get_vehicle_yaw_rad();
-    const float m_yaw_earth_rad = wrap_PI(m_yaw_body_rad + body_yaw_earth_rad);
-
-    // LOS in earth NED directly from yaw_earth + pitch (avoids quaternion frame ambiguity)
-    // NED: x=north, y=east, z=down
-    Vector3f los_ned;
-    const float cp = cosf(m_pitch_rad);
-    const float sp = sinf(m_pitch_rad);
-
-    los_ned.x = cp * cosf(m_yaw_earth_rad);
-    los_ned.y = cp * sinf(m_yaw_earth_rad);
-    los_ned.z = -sp;   // negative pitch (down) => positive z (down)
-
-     //just a safety check, should NEVER occur
-     if (los_ned.length() < 1.0e-6f) {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: return on bad los");
+    switch (project_los_to_altitude(cur_loc, plane_alt_cm, pitch_rad, yaw_ef_rad, target_location)) {
+    case PoiProjection::OK:
+        return true;
+    case PoiProjection::NO_ALTITUDE:
+        return false;
+    case PoiProjection::TOO_ELEVATED:
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: Mount pitch too elevated (%.2f deg)", degrees(pitch_rad));
+        return false;
+    case PoiProjection::TOO_FAR:
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "POI: distance > %dm", (int)AP_MOUNT_POI_PLANE_DIST_M_MAX);
         return false;
     }
-    los_ned.normalize();
-
-    // Policy : if below home alt, you can be looking up, but not if above home alt
-    // Require LOS to be at least MIN_DOWN_DEG below the horizon if above home alt.
-    // This eliminates looking-up and near-parallel cases without needing a separate los.z ~= 0 check.
-    const float MIN_DOWN_DEG = 1.0f; // tune
-    const float min_los_z = sinf(radians(MIN_DOWN_DEG)); // ~= 0.01745
-    if (los_ned.z < min_los_z && target_down_m > 0.0f) {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO,
-                      "POI: Mount pitch too elevated (los.z=%.4f need >= %.4f; pitch=%.2f deg)",
-                      los_ned.z, min_los_z, degrees(m_pitch_rad));
-        return false;
-    }
-
-    // Use real intersection if above home; mirror if below home:
-    // Mirror rule: if we are below home by |target_down|, pretend we are above home by the same amount
-    // for the purpose of selecting a forward point in the home-alt plane.
-    const bool used_mirror = (target_down_m < 0.0f);
-    const float effective_down_m = used_mirror ? -target_down_m : target_down_m;
-    
-    // guaranteed positive with min_los_z check
-    const float t_m = effective_down_m / los_ned.z;
-
-    const float north_m = los_ned.x * t_m;
-    const float east_m  = los_ned.y * t_m;
-
-    // Horizontal distance from current location (meters)
-    const float horiz_dist_m = sqrtf(north_m * north_m + east_m * east_m);
-
-    // Reject targets beyond 5 km (also naturally rejects near-horizon geometry that slips through)
-    if (horiz_dist_m > 5000.0f) {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO,
-                      "POI: distance > 5km: %.1f m", horiz_dist_m);
-        return false;
-    }
-
-    // Build target location at intersection point of home alt plane
-    target_location = cur_loc;
-    target_location.offset(north_m, east_m);
-    target_location.alt = home.alt;
-    return true;
+    return false;
 }
 #endif // AP_MOUNT_POI_LOCK_ENABLED
 
@@ -1261,6 +1377,12 @@ void AP_Mount_Backend::_update_mnt_target()
 
     case MAV_MOUNT_MODE_GPS_POINT:
         // point mount to a GPS point given by the mission planner
+#if AP_MOUNT_POI_LOCK_ENABLED
+        // the pilot may walk the POI around; this only moves _roi_target, the target stays a location
+        if (roi_is_set()) {
+            update_poi_adjustment();
+        }
+#endif
         mnt_target.target_type = MountTargetType::LOCATION;
         return;
 
