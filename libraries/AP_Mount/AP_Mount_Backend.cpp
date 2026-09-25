@@ -373,6 +373,9 @@ void AP_Mount_Backend::update_poi_adjustment()
     float yaw_in;
     get_rc_input(roll_in, pitch_in, yaw_in);
     (void)roll_in;
+    if (!yaw_range_valid()) {
+        yaw_in = 0;
+    }
 
     // Dead zone is already applied 
     const bool input_active = !is_zero(pitch_in) || !is_zero(yaw_in);
@@ -407,14 +410,8 @@ void AP_Mount_Backend::update_poi_adjustment()
         const float pitch_rad = constrain_float(angle_rad.pitch + pitch_in * rate_rads * AP_MOUNT_UPDATE_DT,
                                                 radians(_params.pitch_angle_min.get()),
                                                 radians(_params.pitch_angle_max.get()));
-        float yaw_ef_rad = wrap_PI(angle_rad.get_ef_yaw() + yaw_in * rate_rads * AP_MOUNT_UPDATE_DT);
-        if (_params.yaw_angle_max - _params.yaw_angle_min < 360) {
-            // Keep the POI inside the yaw range the gimbal can reach, otherwise the POI walks past
-            // the mechanical limit while the gimbal stands still and ends up somewhere unviewable.
-            yaw_ef_rad = wrap_PI(constrain_float(wrap_PI(yaw_ef_rad - get_vehicle_yaw_rad()),
-                                                 radians(_params.yaw_angle_min.get()),
-                                                 radians(_params.yaw_angle_max.get())) + get_vehicle_yaw_rad());
-        }
+        // The POI wraps freely; the backend's send_target_angles() stops the gimbal at the yaw it can reach.
+        const float yaw_ef_rad = wrap_PI(angle_rad.get_ef_yaw() + yaw_in * rate_rads * AP_MOUNT_UPDATE_DT);
 
         Location adjusted_target;
         const char *limit_reason = nullptr;

@@ -609,19 +609,30 @@ bool AP_Mount_XFRobot::yaw_continuous_enabled() const
     }
 }
 
+// Location targets reach here unconstrained, so this is also where MNTx_YAW_MIN/MAX are applied to them.
 int16_t AP_Mount_XFRobot::constrain_yaw_target_cd(float yaw_control_rad) const
 {
-    const float yaw_control_cd = degrees(yaw_control_rad) * 100;
-    if (!detected_pod_code.has_value()) {
-        return constrain_int16(yaw_control_cd, -180 * 100, 180 * 100);
+    int16_t yaw_min_cd = -180 * 100;
+    int16_t yaw_max_cd = 180 * 100;
+    if (detected_pod_code.has_value()) {
+        switch (*detected_pod_code) {
+        case PodCode::Z1PRO:
+        case PodCode::Z2PRO:
+            yaw_min_cd = ZPRO_YAW_MIN_CD;
+            yaw_max_cd = ZPRO_YAW_MAX_CD;
+            break;
+        case PodCode::D80AI:
+        case PodCode::D80PRO:
+            break;
+        default:
+            break;
+        }
     }
-    switch (*detected_pod_code) {
-    case PodCode::Z1PRO:
-    case PodCode::Z2PRO:
-        return constrain_int16(yaw_control_cd, ZPRO_YAW_MIN_CD, ZPRO_YAW_MAX_CD);
-    default:
-        return constrain_int16(yaw_control_cd, -180 * 100, 180 * 100);
+    if (yaw_range_valid()) {
+        yaw_min_cd = MAX(yaw_min_cd, _params.yaw_angle_min * 100);
+        yaw_max_cd = MIN(yaw_max_cd, _params.yaw_angle_max * 100);
     }
+    return constrain_int16(degrees(yaw_control_rad) * 100, yaw_min_cd, yaw_max_cd);
 }
 
 // send simple (1byte) command to gimbal (e.g. take pic, start recording)
