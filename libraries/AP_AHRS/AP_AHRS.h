@@ -424,6 +424,11 @@ public:
     // return the index of the primary core or -1 if no primary core selected
     int8_t get_primary_core_index() const { return state.primary_core; }
 
+    // Identity of the estimator currently driving the vehicle, for GCS messages that follow the
+    // "L<n>/<label>: " convention: "L2/EXTNAV" when an EKF3 lane is primary, otherwise the
+    // backend's short name ("DCM", ...). Never names a lane that is not steering the vehicle.
+    void get_primary_estimator_name(char *buf, uint8_t buflen) const;
+
     // get the index of the current primary accelerometer sensor
     uint8_t get_primary_accel_index(void) const { return state.primary_accel; }
 
@@ -745,6 +750,9 @@ public:
     const EKFGSF_yaw *get_yaw_estimator(void) const;
 
 private:
+
+    // short name of an EKF type, as used in GCS messages
+    static const char *ekf_type_shortname(EKFType type);
 
     // roll/pitch/yaw euler angles, all in radians
     float roll;
