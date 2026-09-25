@@ -537,35 +537,8 @@ void AP_AHRS::update(bool skip_ins_update)
 #if HAL_GCS_ENABLED
     if (state.active_EKF != last_active_ekf_type) {
         last_active_ekf_type = state.active_EKF;
-        const char *shortname = "???";
-        switch ((EKFType)state.active_EKF) {
-#if AP_AHRS_DCM_ENABLED
-        case EKFType::DCM:
-            shortname = "DCM";
-            break;
-#endif
-#if AP_AHRS_SIM_ENABLED
-        case EKFType::SIM:
-            shortname = "SIM";
-            break;
-#endif
-#if AP_AHRS_EXTERNAL_ENABLED
-        case EKFType::EXTERNAL:
-            shortname = "External";
-            break;
-#endif
-#if HAL_NAVEKF3_AVAILABLE
-        case EKFType::THREE:
-            shortname = "EKF3";
-            break;
-#endif
-#if HAL_NAVEKF2_AVAILABLE
-        case EKFType::TWO:
-            shortname = "EKF2";
-            break;
-#endif
-        }
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AHRS: %s active", shortname);
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AHRS: %s active",
+                      ekf_type_shortname((EKFType)state.active_EKF));
     }
 #endif // HAL_GCS_ENABLED
 
@@ -2381,7 +2354,7 @@ bool AP_AHRS::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
     if (!healthy()) {
         // this rather generic failure might be overwritten by
         // something more specific in the "backend"
-        hal.util->snprintf(failure_msg, failure_msg_len, "Not healthy");
+        hal.util->snprintf(failure_msg, failure_msg_len, "AHRS not healthy");
         ret = false;
     }
 
@@ -2727,7 +2700,7 @@ void AP_AHRS::_getCorrectedDeltaVelocityNED(Vector3f& ret, float& dt) const
 
 void AP_AHRS::set_failure_inconsistent_message(const char *estimator, const char *axis, float diff_rad, char *failure_msg, const uint8_t failure_msg_len) const
 {
-    hal.util->snprintf(failure_msg, failure_msg_len, "%s %s inconsistent %d deg. Wait or reboot", estimator, axis, (int)degrees(diff_rad));
+    hal.util->snprintf(failure_msg, failure_msg_len, "%s: %s diff %d deg", estimator, axis, (int)degrees(diff_rad));
 }
 
 // check all cores providing consistent attitudes for prearm checks
@@ -2771,13 +2744,17 @@ bool AP_AHRS::attitudes_consistent(char *failure_msg, const uint8_t failure_msg_
     // check primary vs ekf3
     if (configured_ekf_type() == EKFType::THREE || active_EKF_type() == EKFType::THREE) {
         for (uint8_t i = 0; i < EKF3.activeCores(); i++) {
+            // each lane is checked, so the lane has to be named or the message cannot be acted on
+            char estimator[24];
+            hal.util->snprintf(estimator, sizeof(estimator), "L%u/%s", (unsigned)i,
+                               EKF3.lane_label(i));
             Quaternion ekf3_quat;
             EKF3.getQuaternionBodyToNED(i, ekf3_quat);
 
             // check roll and pitch difference
             const float rp_diff_rad = primary_quat.roll_pitch_difference(ekf3_quat);
             if (rp_diff_rad > ATTITUDE_CHECK_THRESH_ROLL_PITCH_RAD) {
-                set_failure_inconsistent_message("EKF3", "Roll/Pitch", rp_diff_rad, failure_msg, failure_msg_len);
+                set_failure_inconsistent_message(estimator, "Roll/Pitch", rp_diff_rad, failure_msg, failure_msg_len);
                 return false;
             }
 
@@ -2786,7 +2763,7 @@ bool AP_AHRS::attitudes_consistent(char *failure_msg, const uint8_t failure_msg_
             primary_quat.angular_difference(ekf3_quat).to_axis_angle(angle_diff);
             const float yaw_diff = fabsf(angle_diff.z);
             if (check_yaw && (yaw_diff > ATTITUDE_CHECK_THRESH_YAW_RAD)) {
-                set_failure_inconsistent_message("EKF3", "Yaw", yaw_diff, failure_msg, failure_msg_len);
+                set_failure_inconsistent_message(estimator, "Yaw", yaw_diff, failure_msg, failure_msg_len);
                 return false;
             }
         }
@@ -3400,6 +3377,49 @@ uint8_t AP_AHRS::_get_primary_IMU_index() const
         imu = AP::ins().get_first_usable_gyro();
     }
     return imu;
+}
+
+const char *AP_AHRS::ekf_type_shortname(EKFType type)
+{
+    switch (type) {
+#if AP_AHRS_DCM_ENABLED
+    case EKFType::DCM:
+        return "DCM";
+#endif
+#if AP_AHRS_SIM_ENABLED
+    case EKFType::SIM:
+        return "SIM";
+#endif
+#if AP_AHRS_EXTERNAL_ENABLED
+    case EKFType::EXTERNAL:
+        return "External";
+#endif
+#if HAL_NAVEKF3_AVAILABLE
+    case EKFType::THREE:
+        return "EKF3";
+#endif
+#if HAL_NAVEKF2_AVAILABLE
+    case EKFType::TWO:
+        return "EKF2";
+#endif
+    }
+    return "???";
+}
+
+void AP_AHRS::get_primary_estimator_name(char *buf, uint8_t buflen) const
+{
+    const EKFType active = active_EKF_type();
+#if HAL_NAVEKF3_AVAILABLE
+    const int8_t primary = get_primary_core_index();
+    if ((active == EKFType::THREE) && (primary >= 0)) {
+        hal.util->snprintf(buf, buflen, "L%u/%s",
+                           (unsigned)primary, EKF3.lane_label(uint8_t(primary)));
+        return;
+    }
+#endif
+    // Not flying on an EKF3 lane, so there is no lane to name: DCM, an external AHRS, or no
+    // primary selected. Naming the backend beats printing a lane that is not steering.
+    hal.util->snprintf(buf, buflen, "%s", ekf_type_shortname(active));
 }
 
 // return the index of the primary core or -1 if no primary core selected

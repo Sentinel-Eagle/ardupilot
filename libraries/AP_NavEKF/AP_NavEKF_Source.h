@@ -57,6 +57,18 @@ public:
         TERTIARY = 2,
     };
 
+    // Label naming what a lane is, from its EK3_SRCn_POSXY setting, e.g. "EXTNAV". A lane with
+    // no horizontal position source dead reckons on its IMU, so it is labelled "IMU".
+    // No label exceeds "EXTNAV"; the 50 character STATUSTEXT budget for every lane message is
+    // computed against that, so keep any label added here within six characters.
+    static const char *posxy_lane_label(SourceXY posxy_source);
+
+    // Writes "L<n>/<label>: check EK3_SRC<n+1>_<suffix>" into failure_msg. Source sets are
+    // mapped one-to-one onto EKF3 lanes, so these parameter failures name their lane like
+    // every other lane message does.
+    void snprintf_lane_param_failure(char *failure_msg, uint8_t failure_msg_len,
+                                     uint8_t lane, const char *param_suffix) const;
+
     // initialisation
     void init();
 

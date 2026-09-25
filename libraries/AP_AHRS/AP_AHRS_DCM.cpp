@@ -1267,7 +1267,7 @@ bool AP_AHRS_DCM::get_vert_pos_rate_D(float &velocity) const
 bool AP_AHRS_DCM::pre_arm_check(bool requires_position, char *failure_msg, uint8_t failure_msg_len) const
 {
     if (!healthy()) {
-        hal.util->snprintf(failure_msg, failure_msg_len, "Not healthy");
+        hal.util->snprintf(failure_msg, failure_msg_len, "DCM not healthy");
         return false;
     }
     return true;
