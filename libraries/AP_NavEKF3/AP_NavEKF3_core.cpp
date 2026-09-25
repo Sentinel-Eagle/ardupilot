@@ -2053,7 +2053,14 @@ void NavEKF3_core::ConstrainVariances()
     // +----------------------------------------------------------------------------------------------+
 
     for (uint8_t i=0; i<=3; i++) P[i][i] = constrain_ftype(P[i][i],0.0,1.0); // attitude error
-    for (uint8_t i=4; i<=5; i++) P[i][i] = constrain_ftype(P[i][i], VEL_STATE_MIN_VARIANCE, 1.0e3); // NE velocity
+    // NE velocity. A lane aided only by ext-nav position gets a much higher floor, see EK3_EXTNAV_VVAR.
+    ftype velMinVariance = VEL_STATE_MIN_VARIANCE;
+#if EK3_FEATURE_EXTERNAL_NAV
+    if (posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV && !uses_velxy_source(AP_NavEKF_Source::SourceXY::EXTNAV)) {
+        velMinVariance = ftype(frontend->_extNavVelMinVar.get());
+    }
+#endif
+    for (uint8_t i=4; i<=5; i++) P[i][i] = constrain_ftype(P[i][i], velMinVariance, 1.0e3);
 
     // if vibration affected use sensor observation variances to set a floor on the state variances
     if (badIMUdata) {
@@ -2200,6 +2207,10 @@ void NavEKF3_core::ConstrainStates()
     for (uint8_t i=7; i<=8; i++) statesArray[i] = constrain_ftype(statesArray[i],-EK3_POSXY_STATE_LIMIT,EK3_POSXY_STATE_LIMIT);
     // height limit covers home alt on everest through to home alt at SL and balloon drop
     stateStruct.position.z = constrain_ftype(stateStruct.position.z,-4.0e4f,1.0e4f);
+    // horizontal wind magnitude limit (EK3_WIND_MAX).
+    if (frontend->_windMax >= 0.0f) {
+        stateStruct.wind_vel.limit_length(ftype(frontend->_windMax));
+    }
     // gyro bias limit (this needs to be set based on manufacturers specs)
     for (uint8_t i=10; i<=12; i++) statesArray[i] = constrain_ftype(statesArray[i],-GYRO_BIAS_LIMIT*dtEkfAvg,GYRO_BIAS_LIMIT*dtEkfAvg);
     // the accelerometer bias limit is controlled by a user adjustable parameter
