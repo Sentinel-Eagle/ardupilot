@@ -370,7 +370,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Units: m
     AP_GROUPINFO("GLITCH_RAD", 7, NavEKF3, _gpsGlitchRadiusMax, GLITCH_RADIUS_DEFAULT),
 
-    // 8 previously used for EKF3_GPS_DELAY parameter that has been deprecated.
+    // 8 previously used for EKF3_GPS_DELAY parameter that has been deprecated, it is now EXTNAV_VVAR (declared next to WIND_MAX).
     // The EKF now takes its GPS delay form the GPS library with the default delays
     // specified by the GPS_DELAY and GPS_DELAY2 parameters.
 
@@ -536,7 +536,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Units: rad/s/s
     AP_GROUPINFO("GBIAS_P_NSE", 26, NavEKF3, _gyroBiasProcessNoise, GBIAS_P_NSE_DEFAULT),
 
-    // 27 previously used for EK2_GSCL_P_NSE parameter that has been removed
+    // 27 previously used for EK2_GSCL_P_NSE parameter that has been removed, it is now EXTNAV_PVAR (declared next to WIND_MAX)
 
     // @Param: ABIAS_P_NSE
     // @DisplayName: Accelerometer bias stability (m/s^3)
@@ -546,7 +546,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Units: m/s/s/s
     AP_GROUPINFO("ABIAS_P_NSE", 28, NavEKF3, _accelBiasProcessNoise, ABIAS_P_NSE_DEFAULT),
 
-    // 29 previously used for EK2_MAG_P_NSE parameter that has been replaced with EK3_MAGE_P_NSE and EK3_MAGB_P_NSE
+    // 29 previously used for EK2_MAG_P_NSE parameter that has been replaced with EK3_MAGE_P_NSE and EK3_MAGB_P_NSE, it is now EXTNAV_IGATE (declared next to WIND_MAX)
 
     // @Param: WIND_P_NSE
     // @DisplayName: Wind velocity process noise (m/s^2)
@@ -564,6 +564,41 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Increment: 0.1
     // @User: Advanced
     AP_GROUPINFO("WIND_PSCALE", 31, NavEKF3, _wndVarHgtRateScale, 1.0f),
+
+    // @Param: WIND_MAX
+    // @DisplayName: Maximum wind speed
+    // @Description: Upper bound on the magnitude of the horizontal wind state. A lane aided only by a noisy position source can otherwise "move" a velocity error into wind estimation, which affects attitude. Set it to what the aircraft can fly against, typically AIRSPEED_MAX. A negative value disables the bound.
+    // @Range: -1 50
+    // @Increment: 1
+    // @User: Advanced
+    // @Units: m/s
+    AP_GROUPINFO("WIND_MAX", 59, NavEKF3, _windMax, -1.0f),
+
+    // @Param: EXTNAV_IGATE
+    // @DisplayName: External nav position innovation gate size
+    // @Description: This sets the percentage number of standard deviations applied to the external nav position measurement innovation consistency check. EK3_POS_I_GATE keeps gating GPS and the other position sources.
+    // @Range: 100 1000
+    // @Increment: 25
+    // @User: Advanced
+    AP_GROUPINFO("EXTNAV_IGATE", 29, NavEKF3, _extNavPosInnovGate, 300),
+
+    // @Param: EXTNAV_PVAR
+    // @DisplayName: Lane position variance eligibility threshold
+    // @Description: NE position state variance (P[7][7]+P[8][8]) above which a lane is not eligible as primary, at 120 m above origin. It is scaled with (height/120)^2 above that, matching how a vision based position source's error grows with height.
+    // @Range: 1 1000
+    // @Increment: 1
+    // @Units: m^2
+    // @User: Advanced
+    AP_GROUPINFO("EXTNAV_PVAR", 27, NavEKF3, _lanePosVarBase, 80.0f),
+
+    // @Param: EXTNAV_VVAR
+    // @DisplayName: External nav position-only lane velocity variance floor
+    // @Description: Minimum NE velocity state variance, per axis, of a lane whose horizontal position comes from external nav and which has no velocity source.
+    // @Range: 0.0001 10
+    // @Increment: 0.1
+    // @Units: m^2/s^2
+    // @User: Advanced
+    AP_GROUPINFO("EXTNAV_VVAR", 8, NavEKF3, _extNavVelMinVar, 1.0f),
 
     // @Param: GPS_CHECK
     // @DisplayName: GPS preflight check
@@ -792,7 +827,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @RebootRequired: True
     AP_GROUPINFO("GSF_USE_MASK", 58, NavEKF3, _gsfUseMask, 3),
 
-    // 59 was GSF_DELAY which was never released in a stable version
+    // 59 was GSF_DELAY which was never released in a stable version, it is now WIND_MAX (declared next to WIND_PSCALE)
 
     // @Param: GSF_RST_MAX
     // @DisplayName: Maximum number of resets to the EKF-GSF yaw estimate allowed
