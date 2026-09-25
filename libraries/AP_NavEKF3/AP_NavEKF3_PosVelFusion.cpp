@@ -849,7 +849,11 @@ void NavEKF3_core::FuseVelPosNED()
             // assumption to constrain tilt errors because innovations can become large
             // due to vehicle motion.
             // External nav position has its own gate (EK3_EXTNAV_IGATE), the other sources keep EK3_POS_I_GATE.
+#if EK3_FEATURE_EXTERNAL_NAV
             const int16_t posInnovGate = extNavUsedForPos ? frontend->_extNavPosInnovGate : frontend->_gpsPosInnovGate;
+#else
+            const int16_t posInnovGate = frontend->_gpsPosInnovGate;
+#endif
             ftype maxPosInnov2 = sq(MAX(0.01 * (ftype)posInnovGate, 1.0))*(varInnovVelPos[3] + varInnovVelPos[4]);
 
             posTestRatio = (sq(innovVelPos[3]) + sq(innovVelPos[4])) / maxPosInnov2;
@@ -907,8 +911,10 @@ void NavEKF3_core::FuseVelPosNED()
                         fusePosData = false;
                     } else
                     {
+#if EK3_FEATURE_EXTERNAL_NAV
                     // ResetPosition() clears posTimeout, so remember why we are here before calling it.
                     const bool resetOnTimeout = posTimeout;
+#endif
                     // reset the position to the current external sensor position
                     ResetPosition(resetDataSource::DEFAULT);
 
