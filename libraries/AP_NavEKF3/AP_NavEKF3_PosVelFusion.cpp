@@ -858,7 +858,13 @@ void NavEKF3_core::FuseVelPosNED()
             // Don't allow test to fail if not navigating and using a constant position
             // assumption to constrain tilt errors because innovations can become large
             // due to vehicle motion.
-            ftype maxPosInnov2 = sq(MAX(0.01 * (ftype)frontend->_gpsPosInnovGate, 1.0))*(varInnovVelPos[3] + varInnovVelPos[4]);
+            // External nav position has its own gate (EK3_EXTNAV_IGATE), the other sources keep EK3_POS_I_GATE.
+#if EK3_FEATURE_EXTERNAL_NAV
+            const int16_t posInnovGate = extNavUsedForPos ? frontend->_extNavPosInnovGate : frontend->_gpsPosInnovGate;
+#else
+            const int16_t posInnovGate = frontend->_gpsPosInnovGate;
+#endif
+            ftype maxPosInnov2 = sq(MAX(0.01 * (ftype)posInnovGate, 1.0))*(varInnovVelPos[3] + varInnovVelPos[4]);
 
             posTestRatio = (sq(innovVelPos[3]) + sq(innovVelPos[4])) / maxPosInnov2;
             bool posCheckPassed = false; // boolean true if position measurements have passed innovation consistency check
@@ -915,6 +921,10 @@ void NavEKF3_core::FuseVelPosNED()
                         fusePosData = false;
                     } else
                     {
+#if EK3_FEATURE_EXTERNAL_NAV
+                    // ResetPosition() clears posTimeout, so remember why we are here before calling it.
+                    const bool resetOnTimeout = posTimeout;
+#endif
                     // reset the position to the current external sensor position
                     ResetPosition(resetDataSource::DEFAULT);
 
@@ -943,7 +953,7 @@ void NavEKF3_core::FuseVelPosNED()
 
 #if EK3_FEATURE_EXTERNAL_NAV
                     if (posxy_source() == AP_NavEKF_Source::SourceXY::EXTNAV) {
-                        const char *reason = posTimeout ? "position timeout" : "position drift large";
+                        const char *reason = resetOnTimeout ? "position timeout" : "position drift large";
                         if (!extNavRepositionMessageSentThisCycle) {
                             GCS_SEND_TEXT(
                                 MAV_SEVERITY_WARNING,

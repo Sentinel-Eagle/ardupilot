@@ -115,7 +115,7 @@ static void send_lane_switch_reason(
         (core_is_primary_eligible(old_core) ? "lower lane stable" : lane_block_reason(old_core));
     GCS_SEND_TEXT(
         MAV_SEVERITY_CRITICAL,
-        "lane switch %u->%u: %s",
+        "lane switch L%u->L%u: %s",
         (unsigned)old_primary,
         (unsigned)new_primary,
         reason);
@@ -404,7 +404,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Units: m
     AP_GROUPINFO("GLITCH_RAD", 7, NavEKF3, _gpsGlitchRadiusMax, GLITCH_RADIUS_DEFAULT),
 
-    // 8 previously used for EKF3_GPS_DELAY parameter that has been deprecated.
+    // 8 previously used for EKF3_GPS_DELAY parameter that has been deprecated, it is now EXTNAV_VVAR (declared next to WIND_MAX).
     // The EKF now takes its GPS delay form the GPS library with the default delays
     // specified by the GPS_DELAY and GPS_DELAY2 parameters.
 
@@ -570,7 +570,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Units: rad/s/s
     AP_GROUPINFO("GBIAS_P_NSE", 26, NavEKF3, _gyroBiasProcessNoise, GBIAS_P_NSE_DEFAULT),
 
-    // 27 previously used for EK2_GSCL_P_NSE parameter that has been removed
+    // 27 previously used for EK2_GSCL_P_NSE parameter that has been removed, it is now EXTNAV_PVAR (declared next to WIND_MAX)
 
     // @Param: ABIAS_P_NSE
     // @DisplayName: Accelerometer bias stability (m/s^3)
@@ -580,7 +580,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Units: m/s/s/s
     AP_GROUPINFO("ABIAS_P_NSE", 28, NavEKF3, _accelBiasProcessNoise, ABIAS_P_NSE_DEFAULT),
 
-    // 29 previously used for EK2_MAG_P_NSE parameter that has been replaced with EK3_MAGE_P_NSE and EK3_MAGB_P_NSE
+    // 29 previously used for EK2_MAG_P_NSE parameter that has been replaced with EK3_MAGE_P_NSE and EK3_MAGB_P_NSE, it is now EXTNAV_IGATE (declared next to WIND_MAX)
 
     // @Param: WIND_P_NSE
     // @DisplayName: Wind velocity process noise (m/s^2)
@@ -598,6 +598,41 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @Increment: 0.1
     // @User: Advanced
     AP_GROUPINFO("WIND_PSCALE", 31, NavEKF3, _wndVarHgtRateScale, 1.0f),
+
+    // @Param: WIND_MAX
+    // @DisplayName: Maximum wind speed
+    // @Description: Upper bound on the magnitude of the horizontal wind state. A lane aided only by a noisy position source can otherwise "move" a velocity error into wind estimation, which affects attitude. Set it to what the aircraft can fly against, typically AIRSPEED_MAX. A negative value disables the bound.
+    // @Range: -1 50
+    // @Increment: 1
+    // @User: Advanced
+    // @Units: m/s
+    AP_GROUPINFO("WIND_MAX", 59, NavEKF3, _windMax, -1.0f),
+
+    // @Param: EXTNAV_IGATE
+    // @DisplayName: External nav position innovation gate size
+    // @Description: This sets the percentage number of standard deviations applied to the external nav position measurement innovation consistency check. EK3_POS_I_GATE keeps gating GPS and the other position sources.
+    // @Range: 100 1000
+    // @Increment: 25
+    // @User: Advanced
+    AP_GROUPINFO("EXTNAV_IGATE", 29, NavEKF3, _extNavPosInnovGate, 300),
+
+    // @Param: EXTNAV_PVAR
+    // @DisplayName: Lane position variance eligibility threshold
+    // @Description: NE position state variance (P[7][7]+P[8][8]) above which a lane is not eligible as primary, at 120 m above origin. It is scaled with (height/120)^2 above that, matching how a vision based position source's error grows with height.
+    // @Range: 1 1000
+    // @Increment: 1
+    // @Units: m^2
+    // @User: Advanced
+    AP_GROUPINFO("EXTNAV_PVAR", 27, NavEKF3, _lanePosVarBase, 80.0f),
+
+    // @Param: EXTNAV_VVAR
+    // @DisplayName: External nav position-only lane velocity variance floor
+    // @Description: Minimum NE velocity state variance, per axis, of a lane whose horizontal position comes from external nav and which has no velocity source.
+    // @Range: 0.0001 10
+    // @Increment: 0.1
+    // @Units: m^2/s^2
+    // @User: Advanced
+    AP_GROUPINFO("EXTNAV_VVAR", 8, NavEKF3, _extNavVelMinVar, 1.0f),
 
     // @Param: GPS_CHECK
     // @DisplayName: GPS preflight check
@@ -826,7 +861,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @RebootRequired: True
     AP_GROUPINFO("GSF_USE_MASK", 58, NavEKF3, _gsfUseMask, 3),
 
-    // 59 was GSF_DELAY which was never released in a stable version
+    // 59 was GSF_DELAY which was never released in a stable version, it is now WIND_MAX (declared next to WIND_PSCALE)
 
     // @Param: GSF_RST_MAX
     // @DisplayName: Maximum number of resets to the EKF-GSF yaw estimate allowed
@@ -1223,7 +1258,7 @@ void NavEKF3::UpdateFilter(void)
             if (last_forced_primary_invalid_lane != forced_primary_index) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
-                    "L%u: request invalid",
+                    "EK3_PRIMARY=%u invalid",
                     (unsigned)forced_primary_index);
                 last_forced_primary_invalid_lane = forced_primary_index;
             }
@@ -1273,7 +1308,7 @@ void NavEKF3::UpdateFilter(void)
                 lane_warning_allowed(bad_lane, reason)) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
-                    "lanes bad, L%u/%s: %s",
+                    "L%u/%s: lanes bad, %s",
                     (unsigned)bad_lane,
                     lane_label(bad_lane),
                     lane_block_reason(core[bad_lane]));
@@ -1386,12 +1421,20 @@ bool NavEKF3::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
         const AP_NavEKF_Source::SourceYaw yaw_source = sources.getYawSource(i);
         if (((magCalParamVal == 5) || (magCalParamVal == 6)) && (yaw_source != AP_NavEKF_Source::SourceYaw::GPS)) {
             // yaw source is configured to use compass but MAG_CAL valid is deprecated
-            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "PreArm: L%u/%s: EK3_MAG_CAL vs EK3_SRC%u_YAW", unsigned(i), lane_label(i), unsigned(i) + 1);
-            magCalInconsistent = true;
+            char lane_msg[50] {};
+            dal.snprintf(lane_msg, sizeof(lane_msg), "L%u/%s: EK3_MAG_CAL vs EK3_SRC%u_YAW",
+                         unsigned(i), lane_label(i), unsigned(i) + 1);
+            if (!magCalInconsistent) {
+                // the caller reports this one itself, so only the lanes it has no room for
+                // need a status text of their own
+                dal.snprintf(failure_msg, failure_msg_len, "%s", lane_msg);
+                magCalInconsistent = true;
+            } else if (prearm_report_allowed(i, lane_msg)) {
+                GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "PreArm: %s", lane_msg);
+            }
         }
     }
     if (magCalInconsistent) {
-        dal.snprintf(failure_msg, failure_msg_len, "EK3_MAG_CAL and EK3_SRCn_YAW inconsistent");
         return false;
     }
 
@@ -2399,7 +2442,7 @@ void NavEKF3::alignLaneSwitchPositionIfNeeded(uint8_t new_primary, uint8_t old_p
     if (core[new_primary].align_horizontal_position_to(core[old_primary])) {
         GCS_SEND_TEXT(
             MAV_SEVERITY_INFO,
-            "L%u/%s: copied pos from %u",
+            "L%u/%s: copied pos from L%u",
             (unsigned)new_primary,
             lane_label(new_primary),
             (unsigned)old_primary);

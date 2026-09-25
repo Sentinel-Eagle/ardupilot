@@ -84,6 +84,11 @@
 #define VEL_STATE_MIN_VARIANCE 1E-4
 #define POS_STATE_MIN_VARIANCE 1E-4
 
+// A position-only ext-nav lane that has rejected every fix for this long is not eligible as primary, whatever its
+// position variance says. With the variance threshold below, P needs 3-6 s of rejection to cross it.
+// Re-selection is still debounced by the 5 s stability window.
+#define EXTNAV_POS_REJECT_INELIGIBLE_MS 1000
+
 // maximum number of times the vertical velocity variance can hit the lower limit before the
 // associated states, variances and covariances are reset
 #define EKF_TARGET_RATE_HZ uint32_t(1.0 / EKF_TARGET_DT)
@@ -207,6 +212,9 @@ public:
     // considered ineligible as primary. Our ext-nav has variance that depends
     // on altitude, so this gets appropriately scaled.
     static constexpr float LANE_POS_VAR_THRESHOLD_BASE = 5.0f;
+
+    // Maximum NE position state variance above which a lane is considered ineligible as
+    // primary is EK3_EXTNAV_PVAR at this reference altitude, scaled with (height / reference)^2.
     static constexpr float LANE_POS_VAR_THRESHOLD_REF_ALT_M = 120.0f;
     float lane_pos_var_threshold(void) const;
 
