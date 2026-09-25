@@ -245,6 +245,14 @@ void AP_Mount_Backend::set_rate_target(float roll_degs, float pitch_degs, float 
 // set_roi_target - sets target location that mount should attempt to point towards
 void AP_Mount_Backend::set_roi_target(const Location &target_loc)
 {
+    // An uninitialised ROI would switch the mount to GPS_POINT and then strand it there:
+    // get_angle_target_to_roi() rejects the same location every cycle, so no angles are ever sent
+    // and the sticks, which no longer drive body-frame yaw in this mode, stop doing anything.
+    if (!target_loc.initialised()) {
+        send_warning_to_GCS("Mount: ignoring invalid ROI");
+        return;
+    }
+
 #if AP_MOUNT_POI_LOCK_ENABLED
     reset_poi_adjustment();
 #endif
@@ -365,6 +373,9 @@ void AP_Mount_Backend::update_poi_adjustment()
     float yaw_in;
     get_rc_input(roll_in, pitch_in, yaw_in);
     (void)roll_in;
+    if (!yaw_range_valid()) {
+        yaw_in = 0;
+    }
 
     // Dead zone is already applied 
     const bool input_active = !is_zero(pitch_in) || !is_zero(yaw_in);
@@ -376,7 +387,8 @@ void AP_Mount_Backend::update_poi_adjustment()
         }
         // Hold the POI on the plane it already sits on for the whole adjustment.  Re-deriving the
         // altitude part way through (from terrain, say) would re-aim the gimbal mid-movement.
-        if (!_roi_target.get_alt_cm(Location::AltFrame::ABSOLUTE, poi_adjustment.plane_alt_cm)) {
+        if (!_roi_target.initialised() ||
+            !_roi_target.get_alt_cm(Location::AltFrame::ABSOLUTE, poi_adjustment.plane_alt_cm)) {
             return;
         }
         poi_adjustment.active = true;
@@ -398,14 +410,8 @@ void AP_Mount_Backend::update_poi_adjustment()
         const float pitch_rad = constrain_float(angle_rad.pitch + pitch_in * rate_rads * AP_MOUNT_UPDATE_DT,
                                                 radians(_params.pitch_angle_min.get()),
                                                 radians(_params.pitch_angle_max.get()));
-        float yaw_ef_rad = wrap_PI(angle_rad.get_ef_yaw() + yaw_in * rate_rads * AP_MOUNT_UPDATE_DT);
-        if (_params.yaw_angle_max - _params.yaw_angle_min < 360) {
-            // Keep the POI inside the yaw range the gimbal can reach, otherwise the POI walks past
-            // the mechanical limit while the gimbal stands still and ends up somewhere unviewable.
-            yaw_ef_rad = wrap_PI(constrain_float(wrap_PI(yaw_ef_rad - get_vehicle_yaw_rad()),
-                                                 radians(_params.yaw_angle_min.get()),
-                                                 radians(_params.yaw_angle_max.get())) + get_vehicle_yaw_rad());
-        }
+        // The POI wraps freely; the backend's send_target_angles() stops the gimbal at the yaw it can reach.
+        const float yaw_ef_rad = wrap_PI(angle_rad.get_ef_yaw() + yaw_in * rate_rads * AP_MOUNT_UPDATE_DT);
 
         Location adjusted_target;
         const char *limit_reason = nullptr;
@@ -992,6 +998,12 @@ AP_Mount_Backend::PoiProjection AP_Mount_Backend::project_los_to_altitude(const 
 // calculate location gimbal is pointing at a specified altitude
 bool AP_Mount_Backend::calculate_poi_at_altitude(const Location &altitude_location, Location &target_location)
 {
+    // the reference may be home, which is still (0,0,0) until the EKF has an origin; get_alt_cm() panics
+    // on an uninitialised Location under SITL rather than returning false
+    if (!altitude_location.initialised()) {
+        return false;
+    }
+
     Location cur_loc;
     if (!get_vehicle_location(cur_loc)) {
         return false;
@@ -1234,8 +1246,8 @@ void AP_Mount_Backend::update_angle_target_from_rate(const MountRateTarget& rate
 
     // update yaw angle target
     angle_rad.yaw = angle_rad.yaw + rate_rad.yaw * AP_MOUNT_UPDATE_DT;
-    if (angle_rad.yaw_is_ef) {
-        // if earth-frame yaw wraps between += 180 degrees
+    if (angle_rad.yaw_is_ef || yaw_range_is_continuous()) {
+        // earth-frame and continuous yaw wrap between += 180 degrees
         angle_rad.yaw = wrap_PI(angle_rad.yaw);
     } else {
         // if body-frame constrain yaw to body-frame limits

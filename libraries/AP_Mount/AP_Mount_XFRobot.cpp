@@ -21,6 +21,8 @@
 
 static constexpr uint8_t SUB_FRAME_REQUEST_CODE = 0x01;
 static constexpr uint8_t CAMERA_1_MASK = 1U << 0;
+static constexpr int16_t ZPRO_YAW_MIN_CD = -140 * 100;
+static constexpr int16_t ZPRO_YAW_MAX_CD = 140 * 100;
 static constexpr float ZOOM_PROTOCOL_UNITS_PER_PERCENT = 100.0f;
 static constexpr float ZOOM_FEEDBACK_UNITS_PER_MULTIPLIER = 10.0f;
 static constexpr uint16_t ABSOLUTE_ZOOM_PROTOCOL_MIN = 1U;
@@ -450,7 +452,12 @@ void AP_Mount_XFRobot::process_packet()
 
     // display hardware and firmware version
     if (!got_firmware_version) {
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s hw:%.1f fw:%.1f", send_text_prefix, double(msg_buff.simple_reply.main.hardware_version * 0.1), double(msg_buff.simple_reply.main.firmware_version * 0.1));
+        const uint8_t pod_code = detected_pod_code.has_value() ? static_cast<uint8_t>(detected_pod_code.value()) : 0;
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s pod:%u hw:%.1f fw:%.1f",
+                      send_text_prefix,
+                      pod_code,
+                      double(msg_buff.simple_reply.main.hardware_version * 0.1),
+                      double(msg_buff.simple_reply.main.firmware_version * 0.1));
         got_firmware_version = true;
     }
 
@@ -499,7 +506,7 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget& angle_target_r
     set_attitude_packet.content.main.roll_control = htole16(constrain_int16(degrees(angle_target_rad.roll) * 100, -180 * 100, 180 * 100));
     set_attitude_packet.content.main.pitch_control = htole16(constrain_int16(degrees(angle_target_rad.pitch) * 100, -90 * 100, 90 * 100));
     const float yaw_control_rad = angle_target_rad.get_bf_yaw(carrier.yaw_rad);
-    set_attitude_packet.content.main.yaw_control = htole16(constrain_int16(degrees(yaw_control_rad) * 100, -180 * 100, 180 * 100));
+    set_attitude_packet.content.main.yaw_control = htole16(constrain_yaw_target_cd(yaw_control_rad));
 
     // byte 11: status, Bit0:INS valid, Bit2:control values valid
     const uint8_t status_ins_bit = carrier.ins_valid ? (1 << 0) : 0;
@@ -574,6 +581,58 @@ void AP_Mount_XFRobot::send_target_angles(const MountAngleTarget& angle_target_r
 
     // store time of send
     last_send_ms = AP_HAL::millis();
+}
+
+// MNTx_YAW_CONT defaults to AUTO because the right answer is a property of the gimbal, not of the
+// airframe: a Z1/Z2Pro cannot reach past +-140 deg, a D80 turns freely.  An explicit 0 or 1 still wins,
+// so a pod we have no entry for can be opted in by hand.
+bool AP_Mount_XFRobot::yaw_continuous_enabled() const
+{
+    if (_params.yaw_continuous >= 0) {
+        return _params.yaw_continuous != 0;
+    }
+
+    // before the first GCU reply we do not know the pod, and a gimbal wound past its stop is the
+    // expensive mistake, so an unknown pod is treated as limited
+    if (!detected_pod_code.has_value()) {
+        return false;
+    }
+    switch (*detected_pod_code) {
+    case PodCode::D80AI:
+    case PodCode::D80PRO:
+        return true;
+    case PodCode::Z1PRO:
+    case PodCode::Z2PRO:
+        return false;
+    default:
+        return false;
+    }
+}
+
+// Location targets reach here unconstrained, so this is also where MNTx_YAW_MIN/MAX are applied to them.
+int16_t AP_Mount_XFRobot::constrain_yaw_target_cd(float yaw_control_rad) const
+{
+    int16_t yaw_min_cd = -180 * 100;
+    int16_t yaw_max_cd = 180 * 100;
+    if (detected_pod_code.has_value()) {
+        switch (*detected_pod_code) {
+        case PodCode::Z1PRO:
+        case PodCode::Z2PRO:
+            yaw_min_cd = ZPRO_YAW_MIN_CD;
+            yaw_max_cd = ZPRO_YAW_MAX_CD;
+            break;
+        case PodCode::D80AI:
+        case PodCode::D80PRO:
+            break;
+        default:
+            break;
+        }
+    }
+    if (yaw_range_valid()) {
+        yaw_min_cd = MAX(yaw_min_cd, _params.yaw_angle_min * 100);
+        yaw_max_cd = MIN(yaw_max_cd, _params.yaw_angle_max * 100);
+    }
+    return constrain_int16(degrees(yaw_control_rad) * 100, yaw_min_cd, yaw_max_cd);
 }
 
 // send simple (1byte) command to gimbal (e.g. take pic, start recording)
@@ -671,6 +730,9 @@ std::optional<float> AP_Mount_XFRobot::get_known_max_zoom_multiplier() const {
         return static_cast<float>(MaxZoomMultiplier::Z1PRO);
     case PodCode::Z2PRO:
         return static_cast<float>(MaxZoomMultiplier::Z2PRO);
+    case PodCode::D80AI:
+    case PodCode::D80PRO:
+        return static_cast<float>(MaxZoomMultiplier::D80);
     default:
         return {};
     }
