@@ -567,12 +567,12 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
 
     // @Param: WIND_MAX
     // @DisplayName: Maximum wind speed
-    // @Description: Upper bound on the magnitude of the horizontal wind state. A lane aided only by a noisy position source can otherwise "move" a velocity error into wind estimation, which affects attitude. Set it to what the aircraft can fly against, typically AIRSPEED_MAX. 0 disables the bound.
-    // @Range: 0 50
+    // @Description: Upper bound on the magnitude of the horizontal wind state. A lane aided only by a noisy position source can otherwise "move" a velocity error into wind estimation, which affects attitude. Set it to what the aircraft can fly against, typically AIRSPEED_MAX. A negative value disables the bound.
+    // @Range: -1 50
     // @Increment: 1
     // @User: Advanced
     // @Units: m/s
-    AP_GROUPINFO("WIND_MAX", 59, NavEKF3, _windMax, 0.0f),
+    AP_GROUPINFO("WIND_MAX", 59, NavEKF3, _windMax, -1.0f),
 
     // @Param: EXTNAV_IGATE
     // @DisplayName: External nav position innovation gate size

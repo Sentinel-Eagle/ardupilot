@@ -2208,7 +2208,7 @@ void NavEKF3_core::ConstrainStates()
     // height limit covers home alt on everest through to home alt at SL and balloon drop
     stateStruct.position.z = constrain_ftype(stateStruct.position.z,-4.0e4f,1.0e4f);
     // horizontal wind magnitude limit (EK3_WIND_MAX).
-    if (frontend->_windMax > 0.0f) {
+    if (frontend->_windMax >= 0.0f) {
         const ftype windMag = stateStruct.wind_vel.length();
         if (windMag > frontend->_windMax) {
             stateStruct.wind_vel *= ftype(frontend->_windMax) / windMag;
