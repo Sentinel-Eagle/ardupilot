@@ -586,7 +586,7 @@ const AP_Param::GroupInfo NavEKF3::var_info[] = {
     // @DisplayName: Lane position variance eligibility threshold
     // @Description: NE position state variance (P[7][7]+P[8][8]) above which a lane is not eligible as primary, at 120 m above origin. It is scaled with (height/120)^2 above that, matching how a vision based position source's error grows with height.
     // @Range: 1 1000
-    // @Increment: 5
+    // @Increment: 1
     // @Units: m^2
     // @User: Advanced
     AP_GROUPINFO("EXTNAV_PVAR", 27, NavEKF3, _lanePosVarBase, 80.0f),
