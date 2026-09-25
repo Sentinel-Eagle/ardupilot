@@ -111,9 +111,7 @@ void Plane::set_guided_WP(const Location &loc)
 }
 
 /*
-  update home location from GPS
-  this is called as long as we have 3D lock and the arming switch is
-  not pushed
+  update home location from the primary lane's position, which needs no GPS
 
   returns true if home is changed
 */
@@ -132,10 +130,13 @@ bool Plane::update_home()
         return false;
     }
     bool ret = false;
-    if (ahrs.home_is_set() && !ahrs.home_is_locked() && gps.status() >= AP_GPS::GPS_OK_FIX_3D) {
+    if (ahrs.home_is_set() && !ahrs.home_is_locked()) {
+        // The horizontal position comes from the primary lane, which may be navigating without
+        // GPS, so a fix is only required by the raw GPS altitude path below.
+        const bool use_gps_alt = ahrs.home_alt_should_use_gps_on_datum_reset();
         Location loc;
-        if (ahrs.get_location(loc)) {
-            if (ahrs.home_alt_should_use_gps_on_datum_reset()) {
+        if ((!use_gps_alt || gps.status() >= AP_GPS::GPS_OK_FIX_3D) && ahrs.get_location(loc)) {
+            if (use_gps_alt) {
                 // For GPS-height estimators and DCM, keep the existing
                 // raw GPS altitude path to avoid home-dependent altitude
                 // feedback when the baro datum is reset below.

@@ -24,6 +24,8 @@
     #pragma GCC optimize("O2")
 #endif
 
+#include <optional>
+
 #include "AP_NavEKF3_feature.h"
 #include <AP_Common/Location.h>
 #include <AP_Math/AP_Math.h>
@@ -486,6 +488,12 @@ public:
     // return the amount of NE position change due to the last position reset in metres
     // returns the time of the last reset or 0 if no reset has ever occurred
     uint32_t getLastPosNorthEastReset(Vector2f &pos) const;
+
+    // Time of the last NE position reset that also re-seeded the position covariance; empty if
+    // none has occurred. Unlike getLastPosNorthEastReset() this excludes resets that only
+    // translate the states (ResetPositionNE), such as an ext-nav reset_counter change or the
+    // position copy at a lane switch, since those leave P untouched.
+    std::optional<uint32_t> getLastPosCovarianceReset(void) const;
 
     // return the amount of D position change due to the last position reset in metres
     // returns the time of the last reset or 0 if no reset has ever occurred
@@ -1301,6 +1309,7 @@ private:
     bool lastMagOffsetsValid;       // True when lastMagOffsets has been initialized
     Vector2F posResetNE;            // Change in North/East position due to last in-flight reset in metres. Returned by getLastPosNorthEastReset
     uint32_t lastPosReset_ms;       // System time at which the last position reset occurred. Returned by getLastPosNorthEastReset
+    std::optional<uint32_t> lastPosCovReset_ms; // System time of the last position reset that re-seeded P. Returned by getLastPosCovarianceReset
     uint32_t posResetVetoStart_ms;  // Time the hold-off of a position reset onto an un-vetted GPS fix started. 0 when inactive
     uint32_t posResetVetoLast_ms;   // Last time the un-vetted GPS reset hold-off was evaluated, used to restart the window after gaps
     Vector2F velResetNE;            // Change in North/East velocity due to last in-flight reset in metres/sec. Returned by getLastVelNorthEastReset

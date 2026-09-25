@@ -5,7 +5,6 @@
 #include "AP_Airspeed.h"
 
 #include <AP_Common/AP_Common.h>
-#include <AP_GPS/AP_GPS.h>
 #include <AP_Math/AP_Math.h>
 #include <GCS_MAVLink/GCS.h>
 #include <AP_AHRS/AP_AHRS.h>
@@ -40,12 +39,13 @@ void AP_Airspeed::check_sensor_ahrs_wind_max_failures(uint8_t i)
         return;
     }
 
-    const AP_GPS &gps = AP::gps();
-    if (gps.status() < AP_GPS::GPS_Status::GPS_OK_FIX_3D) {
-        // GPS speed can't be trusted, re-enable airspeed as a fallback
+    // Compare airspeed with the current lane's groundspeed.
+    Vector3f vel_ned;
+    if (!AP::ahrs().get_velocity_NED(vel_ned)) {
+        // no velocity estimate to compare against, re-enable airspeed as a fallback
         if ((param[i].use == 0) && (state[i].failures.param_use_backup == 1)) {
-            GCS_SEND_TEXT(MAV_SEVERITY_NOTICE, "Airspeed sensor %d, Re-enabled as GPS fall-back", i+1);
-            param[i].use.set_and_notify(state[i].failures.param_use_backup); 
+            GCS_SEND_TEXT(MAV_SEVERITY_NOTICE, "Airspeed sensor %d, Re-enabled as velocity fall-back", i+1);
+            param[i].use.set_and_notify(state[i].failures.param_use_backup);
             state[i].failures.param_use_backup = -1;
         }
         return;
@@ -69,8 +69,8 @@ void AP_Airspeed::check_sensor_ahrs_wind_max_failures(uint8_t i)
         data_is_inconsistent = state[i].failures.test_ratio > gate_size;
     }
     
-    const auto gps_speed = gps.velocity().length();
-    const float speed_diff = fabsf(state[i].airspeed-gps_speed);
+    const float gnd_speed = vel_ned.length();
+    const float speed_diff = fabsf(state[i].airspeed-gnd_speed);
     const bool data_is_implausible = is_positive(_wind_max) && speed_diff > _wind_max;
     // update health_probability with LowPassFilter
     if (data_is_implausible || data_is_inconsistent) {
@@ -110,7 +110,12 @@ void AP_Airspeed::check_sensor_ahrs_wind_max_failures(uint8_t i)
 
         if (is_positive(wind_warn) && (speed_diff > wind_warn) && ((now_ms - state[i].failures.last_warn_ms) > 15000)) {
             state[i].failures.last_warn_ms = now_ms;
-            GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Airspeed %d warning %0.1fm/s air to gnd speed diff", i+1, speed_diff);
+            // Name the lane the ground speed came from: the same sensor reads healthy or
+            // unhealthy depending on which lane is primary, so the message is unreadable without it.
+            char estimator[16];
+            AP::ahrs().get_primary_estimator_name(estimator, sizeof(estimator));
+            GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "%s: Airspeed %d air-gnd diff %0.1fm/s",
+                          estimator, i+1, speed_diff);
         }
 
     // if Re-Enable options is allowed, and sensor is disabled but was previously enabled, and is probably healthy

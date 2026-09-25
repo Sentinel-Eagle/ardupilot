@@ -181,8 +181,10 @@ void NavEKF3_core::ResetPosition(resetDataSource posResetSource)
     posResetNE.x = stateStruct.position.x - posResetNE.x;
     posResetNE.y = stateStruct.position.y - posResetNE.y;
 
-    // store the time of the reset
+    // store the time of the reset. This reset re-seeds P, so it is also the one the lane
+    // selection treats as a reason for the lane to prove its variance again.
     lastPosReset_ms = imuSampleTime_ms;
+    lastPosCovReset_ms = imuSampleTime_ms;
 
     // clear the timeout flags and counters
     posTimeout = false;
@@ -666,6 +668,14 @@ void NavEKF3_core::SelectVelPosFusion()
         posxy_source_reset = false;
         extNavPosResetOnRecoveryPending = false;
         ResetPositionNE(extNavDataDelayed.pos.x, extNavDataDelayed.pos.y);
+        // A reset_counter change only re-anchors the frame of an estimate the
+        // lane has been fusing all along, so P is left alone and the lane selection does not make
+        // the lane prove itself again. Coming back after a loss is different: the lane dead
+        // reckoned for seconds and P may not have grown past the eligibility gate in that time,
+        // so this reset is recorded like a covariance re-seed and restarts the stability window.
+        if (extNavRecoveredAfterLoss) {
+            lastPosCovReset_ms = imuSampleTime_ms;
+        }
         if (activeHgtSource == AP_NavEKF_Source::SourceZ::EXTNAV) {
             ResetPositionD(-hgtMea);
         }

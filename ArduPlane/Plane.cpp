@@ -485,8 +485,12 @@ void Plane::update_GPS_10Hz(void)
                 ground_start_count = 5;
 
             } else if (!hal.util->was_watchdog_reset()) {
-                if (!set_home_persistently(gps.location())) {
-                    // silently ignore failure...
+                // Upstream sets home from the first good fixes after boot no matter what.
+                // We change that as we rely on ext-nav more.
+                if (!ahrs.home_is_set()) {
+                    if (!set_home_persistently(gps.location())) {
+                        // silently ignore failure...
+                    }
                 }
 
                 next_WP_loc = prev_WP_loc = home;

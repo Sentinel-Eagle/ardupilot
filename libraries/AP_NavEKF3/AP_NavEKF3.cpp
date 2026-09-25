@@ -1214,16 +1214,17 @@ void NavEKF3::UpdateFilter(void)
             coreDcmAttAcceptSince_ms[i].reset();
         }
 
-        // A position reset re-seeds the position covariance, so a small P right
-        // after a reset is no evidence of a stable estimate (GPS resets seed P
-        // well below lane_pos_var_threshold while the position may have jumped
-        // onto a bad fix). Restart the stability window so a freshly-reset lane
-        // must prove itself for the full window before it can be switched to.
-        Vector2f posResetDelta;
-        const uint32_t lastPosResetTime_ms = core[i].getLastPosNorthEastReset(posResetDelta);
-        if (lastPosResetTime_ms != 0 &&
+        // A position reset that re-seeds the position covariance leaves a small P that is no
+        // evidence of a stable estimate (GPS resets seed P well below lane_pos_var_threshold
+        // while the position may have jumped onto a bad fix, and a glitch reposition seeds a
+        // fixed value). Restart the stability window so such a lane must prove itself for the
+        // full window before it can be switched to. Resets that only translate the states, such
+        // as an ext-nav reset_counter change or the position copy at a lane switch, leave P as it
+        // was and are deliberately not counted, so that it's possible to do position resets often.
+        const std::optional<uint32_t> lastPosCovReset_ms = core[i].getLastPosCovarianceReset();
+        if (lastPosCovReset_ms.has_value() &&
             corePosVarAcceptSince_ms[i].has_value() &&
-            lastPosResetTime_ms >= *corePosVarAcceptSince_ms[i]) {
+            *lastPosCovReset_ms >= *corePosVarAcceptSince_ms[i]) {
             corePosVarAcceptSince_ms[i].reset();
         }
     }
@@ -1441,26 +1442,29 @@ bool NavEKF3::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
         dal.snprintf(failure_msg, failure_msg_len, "no EKF3 cores");
         return false;
     }
-    bool all_lanes_ready = true;
+    // Only the lane we would fly on has to pass. The other lanes are backups: a GPS lane
+    // without a fix, or a lane whose source has not come up yet, must not keep an otherwise
+    // ready vehicle on the ground. A backup lane that is not ready still gets its own status
+    // text, so it does not go unnoticed before takeoff.
+    bool primary_ready = true;
     for (uint8_t i = 0; i < num_cores; i++) {
-        // Both report paths below prepend "PreArm: " into a 50 character STATUSTEXT, so only the
-        // first 42 characters of a lane message are ever seen; every message is written to fit.
+        // Both report paths below prepend a short prefix into a 50 character STATUSTEXT, so only
+        // the first 42 characters of a lane message are ever seen. Every message is written to fit.
         char lane_msg[50] {};
         if (lane_pre_arm_check(i, requires_position, lane_msg, sizeof(lane_msg))) {
             continue;
         }
-        if (all_lanes_ready) {
-            // the caller reports this one itself, so only the lanes it has no room for need a
-            // status text of their own
+        if (i == primary) {
+            // the caller reports this one itself as the arming failure
             dal.snprintf(failure_msg, failure_msg_len, "%s", lane_msg);
-            all_lanes_ready = false;
+            primary_ready = false;
             continue;
         }
         if (prearm_report_allowed(i, lane_msg)) {
-            GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "PreArm: %s", lane_msg);
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "backup %s", lane_msg);
         }
     }
-    return all_lanes_ready;
+    return primary_ready;
 }
 
 const char *NavEKF3::lane_label(uint8_t lane) const
