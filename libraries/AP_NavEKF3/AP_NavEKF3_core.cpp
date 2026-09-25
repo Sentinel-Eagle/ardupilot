@@ -2209,10 +2209,7 @@ void NavEKF3_core::ConstrainStates()
     stateStruct.position.z = constrain_ftype(stateStruct.position.z,-4.0e4f,1.0e4f);
     // horizontal wind magnitude limit (EK3_WIND_MAX).
     if (frontend->_windMax >= 0.0f) {
-        const ftype windMag = stateStruct.wind_vel.length();
-        if (windMag > frontend->_windMax) {
-            stateStruct.wind_vel *= ftype(frontend->_windMax) / windMag;
-        }
+        stateStruct.wind_vel.limit_length(ftype(frontend->_windMax));
     }
     // gyro bias limit (this needs to be set based on manufacturers specs)
     for (uint8_t i=10; i<=12; i++) statesArray[i] = constrain_ftype(statesArray[i],-GYRO_BIAS_LIMIT*dtEkfAvg,GYRO_BIAS_LIMIT*dtEkfAvg);
