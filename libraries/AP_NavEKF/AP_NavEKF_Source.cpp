@@ -319,8 +319,8 @@ const char *AP_NavEKF_Source::posxy_lane_label(SourceXY posxy_source)
         return "WHEEL";
     }
     // out-of-enum EK3_SRCn_POSXY. pre_arm_check() only rejects this when the mode requires
-    // position, so keep it no longer than "EXTNAV" to hold the message length budget.
-    return "BAD";
+    // position. We write `UNKNWN` instead of `UNKNOWN`, so it's max 6 chars like `EXTNAV`.
+    return "UNKNWN";
 }
 
 // Source sets map one-to-one onto EKF3 lanes, so a message about set `i` is a message about
