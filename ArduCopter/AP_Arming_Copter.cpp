@@ -450,7 +450,7 @@ bool AP_Arming_Copter::mandatory_position_checks(bool display_failure)
     const auto &ahrs = AP::ahrs();
     char failure_msg[100] = {};
     if (!ahrs.pre_arm_check(mode_requires_position, failure_msg, sizeof(failure_msg))) {
-        check_failed(display_failure, "AHRS: %s", failure_msg);
+        check_failed(display_failure, "%s", failure_msg);
         return false;
     }
 

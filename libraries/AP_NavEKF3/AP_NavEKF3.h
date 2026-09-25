@@ -60,6 +60,10 @@ public:
     // requires_position should be true if horizontal position configuration should be checked
     bool pre_arm_check(bool requires_position, char *failure_msg, uint8_t failure_msg_len) const;
 
+    // Label naming what a lane is, from its EK3_SRCn_POSXY setting, e.g. "EXTNAV". Read from the
+    // source set rather than the core, so it is also correct before the cores have been set up.
+    const char *lane_label(uint8_t lane) const;
+
     // returns the index of the primary core
     // return -1 if no primary core selected
     int8_t getPrimaryCoreIndex(void) const;
@@ -590,6 +594,9 @@ private:
     // old_primary - index of the ekf instance that we are currently using as the primary
     void updateLaneSwitchPosDownResetData(uint8_t new_primary, uint8_t old_primary);
     void alignLaneSwitchPositionIfNeeded(uint8_t new_primary, uint8_t old_primary);
+
+    // pre-arm checks for a single lane; failure_msg always names the lane and its label
+    bool lane_pre_arm_check(uint8_t lane, bool requires_position, char *failure_msg, uint8_t failure_msg_len) const;
 
     std::optional<uint8_t> requested_forced_primary_core(void) const;
     uint8_t desired_primary_core(void) const;
