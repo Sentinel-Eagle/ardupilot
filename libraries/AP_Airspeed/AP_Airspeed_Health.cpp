@@ -110,7 +110,12 @@ void AP_Airspeed::check_sensor_ahrs_wind_max_failures(uint8_t i)
 
         if (is_positive(wind_warn) && (speed_diff > wind_warn) && ((now_ms - state[i].failures.last_warn_ms) > 15000)) {
             state[i].failures.last_warn_ms = now_ms;
-            GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "Airspeed %d warning %0.1fm/s air to gnd speed diff", i+1, speed_diff);
+            // Name the lane the ground speed came from: the same sensor reads healthy or
+            // unhealthy depending on which lane is primary, so the message is unreadable without it.
+            char estimator[16];
+            AP::ahrs().get_primary_estimator_name(estimator, sizeof(estimator));
+            GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "%s: Airspeed %d air-gnd diff %0.1fm/s",
+                          estimator, i+1, speed_diff);
         }
 
     // if Re-Enable options is allowed, and sensor is disabled but was previously enabled, and is probably healthy
