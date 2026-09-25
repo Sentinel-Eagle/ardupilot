@@ -241,7 +241,7 @@ bool AP_Arming_Plane::ins_checks(bool display_failure)
     if (check_enabled(Check::INS)) {
         char failure_msg[50] = {};
         if (!AP::ahrs().pre_arm_check(true, failure_msg, sizeof(failure_msg))) {
-            check_failed(Check::INS, display_failure, "AHRS: %s", failure_msg);
+            check_failed(Check::INS, display_failure, "%s", failure_msg);
             return false;
         }
     }

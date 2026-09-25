@@ -60,8 +60,10 @@ bool NavEKF3_core::pre_arm_check(bool requires_position, char *failure_msg, uint
             !has_acceptable_posxy_variance()) {
             const float pos_variance = get_pos_variance_NE();
             dal.snprintf(failure_msg, failure_msg_len,
-                         "EKF3[%u] pos variance %.1f",
-                         unsigned(core_index)+1, (double)pos_variance);
+                         "L%u/%s: pos variance %.1f",
+                         unsigned(core_index),
+                         lane_label(),
+                         (double)pos_variance);
             return false;
         }
 
@@ -71,7 +73,8 @@ bool NavEKF3_core::pre_arm_check(bool requires_position, char *failure_msg, uint
             if (hvel_innovation > MAX_VEL_INNOVATION) {
                 // more than 2 m/s horizontal velocity innovation on the ground
                 dal.snprintf(failure_msg, failure_msg_len,
-                             "EKF3[%u] vel error %.1f", unsigned(core_index)+1, hvel_innovation);
+                             "L%u/%s: vel error %.1f",
+                             unsigned(core_index), lane_label(), (double)hvel_innovation);
                 return false;
             }
         }
@@ -200,6 +203,13 @@ uint32_t NavEKF3_core::getLastPosNorthEastReset(Vector2f &pos) const
 {
     pos = posResetNE.tofloat();
     return lastPosReset_ms;
+}
+
+// Return the time of the last position reset that re-seeded the position covariance.
+// Empty if no such reset has ever occurred.
+std::optional<uint32_t> NavEKF3_core::getLastPosCovarianceReset(void) const
+{
+    return lastPosCovReset_ms;
 }
 
 // return the amount of vertical position change due to the last vertical position reset in metres

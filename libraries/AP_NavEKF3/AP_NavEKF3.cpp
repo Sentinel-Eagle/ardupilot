@@ -11,6 +11,9 @@
 
 #include "AP_DAL/AP_DAL.h"
 
+#include <AP_Math/crc.h>
+#include <string.h>
+
 #include <algorithm>
 #include <new>
 
@@ -112,7 +115,7 @@ static void send_lane_switch_reason(
         (core_is_primary_eligible(old_core) ? "lower lane stable" : lane_block_reason(old_core));
     GCS_SEND_TEXT(
         MAV_SEVERITY_CRITICAL,
-        "EKF3 lane switch %u->%u: %s",
+        "lane switch L%u->L%u: %s",
         (unsigned)old_primary,
         (unsigned)new_primary,
         reason);
@@ -136,6 +139,37 @@ static bool lane_warning_allowed(uint8_t lane, LaneBlockReason reason)
         return false;
     }
     last_ms = now_ms;
+    return true;
+}
+
+// The arming code only shows one failure message, so a lane blocked for its own reason would stay
+// hidden behind whichever lane is reported first. Each lane therefore gets its own status text,
+// repeated only when its message changes or after this interval.
+static constexpr uint32_t PREARM_REPORT_INTERVAL_MS = 30000;
+// Many of these messages carry a live value, so their text changes on every call and the
+// interval above would never apply. A changed reason is still worth reporting early, but a
+// lane never reports faster than this.
+static constexpr uint32_t PREARM_REPORT_MIN_INTERVAL_MS = 5000;
+
+static bool prearm_report_allowed(uint8_t lane, const char *msg)
+{
+    // the message CRC costs a word per lane and still reports a changed reason immediately
+    static uint32_t last_ms[MAX_EKF_CORES];
+    static uint32_t last_crc[MAX_EKF_CORES];
+    if (lane >= MAX_EKF_CORES) {
+        return true;
+    }
+    const uint32_t crc = crc_crc32(0, (const uint8_t *)msg, strlen(msg));
+    const uint32_t now_ms = AP::dal().millis();
+    if (last_ms[lane] != 0) {
+        const uint32_t age_ms = now_ms - last_ms[lane];
+        if (age_ms < PREARM_REPORT_MIN_INTERVAL_MS ||
+            (last_crc[lane] == crc && age_ms < PREARM_REPORT_INTERVAL_MS)) {
+            return false;
+        }
+    }
+    last_ms[lane] = now_ms;
+    last_crc[lane] = crc;
     return true;
 }
 
@@ -1123,7 +1157,7 @@ void NavEKF3::report_lane_sensor_assignments(void) const
             msg_len += MAX(dal.snprintf(msg+msg_len, sizeof(msg)-msg_len, " airspeed%u", (unsigned)i), 0);
             msg_len = MIN(msg_len, sizeof(msg)-1);
         }
-        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u: %s", (unsigned)i, msg);
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "L%u/%s: %s", (unsigned)i, lane_label(i), msg);
     }
 }
 
@@ -1180,16 +1214,17 @@ void NavEKF3::UpdateFilter(void)
             coreDcmAttAcceptSince_ms[i].reset();
         }
 
-        // A position reset re-seeds the position covariance, so a small P right
-        // after a reset is no evidence of a stable estimate (GPS resets seed P
-        // well below lane_pos_var_threshold while the position may have jumped
-        // onto a bad fix). Restart the stability window so a freshly-reset lane
-        // must prove itself for the full window before it can be switched to.
-        Vector2f posResetDelta;
-        const uint32_t lastPosResetTime_ms = core[i].getLastPosNorthEastReset(posResetDelta);
-        if (lastPosResetTime_ms != 0 &&
+        // A position reset that re-seeds the position covariance leaves a small P that is no
+        // evidence of a stable estimate (GPS resets seed P well below lane_pos_var_threshold
+        // while the position may have jumped onto a bad fix, and a glitch reposition seeds a
+        // fixed value). Restart the stability window so such a lane must prove itself for the
+        // full window before it can be switched to. Resets that only translate the states, such
+        // as an ext-nav reset_counter change or the position copy at a lane switch, leave P as it
+        // was and are deliberately not counted, so that it's possible to do position resets often.
+        const std::optional<uint32_t> lastPosCovReset_ms = core[i].getLastPosCovarianceReset();
+        if (lastPosCovReset_ms.has_value() &&
             corePosVarAcceptSince_ms[i].has_value() &&
-            lastPosResetTime_ms >= *corePosVarAcceptSince_ms[i]) {
+            *lastPosCovReset_ms >= *corePosVarAcceptSince_ms[i]) {
             corePosVarAcceptSince_ms[i].reset();
         }
     }
@@ -1223,7 +1258,7 @@ void NavEKF3::UpdateFilter(void)
             if (last_forced_primary_invalid_lane != forced_primary_index) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
-                    "EKF3 lane req %u invalid",
+                    "EK3_PRIMARY=%u invalid",
                     (unsigned)forced_primary_index);
                 last_forced_primary_invalid_lane = forced_primary_index;
             }
@@ -1237,8 +1272,9 @@ void NavEKF3::UpdateFilter(void)
                 lane_warning_allowed(primary, reason)) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
-                    "EKF3 lane %u forced: %s",
+                    "L%u/%s: forced, %s",
                     (unsigned)primary,
+                    lane_label(primary),
                     lane_block_reason(core[primary]));
                 last_forced_primary_bad_lane = primary;
                 last_forced_primary_bad_reason = bad_reason;
@@ -1249,8 +1285,9 @@ void NavEKF3::UpdateFilter(void)
             if (last_forced_primary_bad_lane.has_value()) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_INFO,
-                    "EKF3 lane %u forced recovered",
-                    (unsigned)primary);
+                    "L%u/%s: forced recovered",
+                    (unsigned)primary,
+                    lane_label(primary));
                 last_forced_primary_bad_lane.reset();
                 last_forced_primary_bad_reason.reset();
             }
@@ -1271,8 +1308,9 @@ void NavEKF3::UpdateFilter(void)
                 lane_warning_allowed(bad_lane, reason)) {
                 GCS_SEND_TEXT(
                     MAV_SEVERITY_WARNING,
-                    "EKF3 lanes bad: %u %s",
+                    "L%u/%s: lanes bad, %s",
                     (unsigned)bad_lane,
+                    lane_label(bad_lane),
                     lane_block_reason(core[bad_lane]));
                 last_auto_primary_bad_lane = bad_lane;
                 last_auto_primary_bad_reason = bad_reason;
@@ -1280,7 +1318,7 @@ void NavEKF3::UpdateFilter(void)
         } else if (last_auto_primary_bad_lane.has_value()) {
             GCS_SEND_TEXT(
                 MAV_SEVERITY_INFO,
-                "EKF3 lanes recovered");
+                "lanes recovered");
             last_auto_primary_bad_lane.reset();
             last_auto_primary_bad_reason.reset();
         }
@@ -1383,12 +1421,20 @@ bool NavEKF3::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
         const AP_NavEKF_Source::SourceYaw yaw_source = sources.getYawSource(i);
         if (((magCalParamVal == 5) || (magCalParamVal == 6)) && (yaw_source != AP_NavEKF_Source::SourceYaw::GPS)) {
             // yaw source is configured to use compass but MAG_CAL valid is deprecated
-            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "PreArm: EK3_MAG_CAL and EK3_SRC%u_YAW inconsistent", unsigned(i) + 1);
-            magCalInconsistent = true;
+            char lane_msg[50] {};
+            dal.snprintf(lane_msg, sizeof(lane_msg), "L%u/%s: EK3_MAG_CAL vs EK3_SRC%u_YAW",
+                         unsigned(i), lane_label(i), unsigned(i) + 1);
+            if (!magCalInconsistent) {
+                // the caller reports this one itself, so only the lanes it has no room for
+                // need a status text of their own
+                dal.snprintf(failure_msg, failure_msg_len, "%s", lane_msg);
+                magCalInconsistent = true;
+            } else if (prearm_report_allowed(i, lane_msg)) {
+                GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "PreArm: %s", lane_msg);
+            }
         }
     }
     if (magCalInconsistent) {
-        dal.snprintf(failure_msg, failure_msg_len, "EK3_MAG_CAL and EK3_SRCn_YAW inconsistent");
         return false;
     }
 
@@ -1396,29 +1442,61 @@ bool NavEKF3::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
         dal.snprintf(failure_msg, failure_msg_len, "no EKF3 cores");
         return false;
     }
+    // Only the lane we would fly on has to pass. The other lanes are backups: a GPS lane
+    // without a fix, or a lane whose source has not come up yet, must not keep an otherwise
+    // ready vehicle on the ground. A backup lane that is not ready still gets its own status
+    // text, so it does not go unnoticed before takeoff.
+    bool primary_ready = true;
     for (uint8_t i = 0; i < num_cores; i++) {
-        Location origin;
-        if (!core[i].getOriginLLH(origin)) {
-            dal.snprintf(failure_msg, failure_msg_len, "EKF3 core %d has no origin", (int)i);
-            return false;
+        // Both report paths below prepend a short prefix into a 50 character STATUSTEXT, so only
+        // the first 42 characters of a lane message are ever seen. Every message is written to fit.
+        char lane_msg[50] {};
+        if (lane_pre_arm_check(i, requires_position, lane_msg, sizeof(lane_msg))) {
+            continue;
         }
-        if (!core[i].healthy()) {
-            const char *failure = core[i].prearm_failure_reason();
-            if (failure != nullptr) {
-                dal.snprintf(failure_msg, failure_msg_len, failure);
-            } else {
-                dal.snprintf(failure_msg, failure_msg_len, "EKF3 core %d unhealthy", (int)i);
-            }
-            return false;
+        if (i == primary) {
+            // the caller reports this one itself as the arming failure
+            dal.snprintf(failure_msg, failure_msg_len, "%s", lane_msg);
+            primary_ready = false;
+            continue;
         }
-        if (!core[i].configured_sources_ready(failure_msg, failure_msg_len)) {
-            return false;
-        }
-        if (!core[i].pre_arm_check(requires_position, failure_msg, failure_msg_len)) {
-            return false;
+        if (prearm_report_allowed(i, lane_msg)) {
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "backup %s", lane_msg);
         }
     }
-    return true;
+    return primary_ready;
+}
+
+const char *NavEKF3::lane_label(uint8_t lane) const
+{
+    return AP_NavEKF_Source::posxy_lane_label(sources.getPosXYSource(lane));
+}
+
+// pre-arm checks for a single lane. Every message it writes names the lane and the sensor
+// shortcut the check concerns, so a message stays meaningful once several lanes report at once.
+bool NavEKF3::lane_pre_arm_check(uint8_t lane, bool requires_position, char *failure_msg, uint8_t failure_msg_len) const
+{
+    Location origin;
+    if (!core[lane].getOriginLLH(origin)) {
+        dal.snprintf(failure_msg, failure_msg_len, "L%u/%s: has no origin",
+                     (unsigned)lane, lane_label(lane));
+        return false;
+    }
+    if (!core[lane].healthy()) {
+        const char *failure = core[lane].prearm_failure_reason();
+        if (failure != nullptr) {
+            dal.snprintf(failure_msg, failure_msg_len, "L%u/%s: %s",
+                         (unsigned)lane, lane_label(lane), failure);
+        } else {
+            dal.snprintf(failure_msg, failure_msg_len, "L%u/%s: unhealthy",
+                         (unsigned)lane, lane_label(lane));
+        }
+        return false;
+    }
+    if (!core[lane].configured_sources_ready(failure_msg, failure_msg_len)) {
+        return false;
+    }
+    return core[lane].pre_arm_check(requires_position, failure_msg, failure_msg_len);
 }
 
 // returns the index of the primary core
@@ -2364,8 +2442,9 @@ void NavEKF3::alignLaneSwitchPositionIfNeeded(uint8_t new_primary, uint8_t old_p
     if (core[new_primary].align_horizontal_position_to(core[old_primary])) {
         GCS_SEND_TEXT(
             MAV_SEVERITY_INFO,
-            "EKF3 lane %u copied pos from %u",
+            "L%u/%s: copied pos from L%u",
             (unsigned)new_primary,
+            lane_label(new_primary),
             (unsigned)old_primary);
     }
 }

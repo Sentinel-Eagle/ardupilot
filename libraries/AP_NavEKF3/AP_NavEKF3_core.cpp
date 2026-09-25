@@ -62,6 +62,11 @@ AP_NavEKF_Source::SourceXY NavEKF3_core::posxy_source(void) const
     return frontend->sources.getPosXYSource(core_index);
 }
 
+const char *NavEKF3_core::lane_label(void) const
+{
+    return AP_NavEKF_Source::posxy_lane_label(posxy_source());
+}
+
 AP_NavEKF_Source::SourceXY NavEKF3_core::velxy_source(void) const
 {
     return frontend->sources.getVelXYSource(core_index);
@@ -197,7 +202,11 @@ bool NavEKF3_core::setup_core(uint8_t _imu_index, uint8_t _core_index)
                 } else if (now > 15000) {
                     severity = MAV_SEVERITY_WARNING;
                 }
-                GCS_SEND_TEXT(severity, "EKF3 waiting for GPS config data");
+                GCS_SEND_TEXT(
+                    severity,
+                    "L%u/%s: waiting for GPS config data",
+                    (unsigned)core_index,
+                    lane_label());
             }
 #endif
             return false;
@@ -311,14 +320,14 @@ bool NavEKF3_core::setup_core(uint8_t _imu_index, uint8_t _core_index)
     if ((yawEstimator == nullptr) && (frontend->_gsfRunMask & (1U<<core_index))) {
         // check if there is enough memory to create the EKF-GSF object
         if (dal.available_memory() < sizeof(EKFGSF_yaw) + 1024) {
-            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "EKF3 lane%u IMU%u GSF: not enough memory",(unsigned)core_index,(unsigned)imu_index);
+            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "L%u/%s: GSF: not enough memory",(unsigned)core_index,lane_label());
             return false;
         }
 
         // try to instantiate
         yawEstimator = NEW_NOTHROW EKFGSF_yaw();
         if (yawEstimator == nullptr) {
-            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "EKF3 lane%u IMU%u GSF: allocation failed",(unsigned)core_index,(unsigned)imu_index);
+            GCS_SEND_TEXT(MAV_SEVERITY_CRITICAL, "L%u/%s: GSF: allocation failed",(unsigned)core_index,lane_label());
             return false;
         }
     }
@@ -362,6 +371,7 @@ void NavEKF3_core::InitialiseVariables()
     timeTasReceived_ms = 0;
     lastPreAlignGpsCheckTime_ms = imuSampleTime_ms;
     lastPosReset_ms = 0;
+    lastPosCovReset_ms.reset();
     posResetVetoStart_ms = 0;
     posResetVetoLast_ms = 0;
     lastVelReset_ms = 0;
@@ -562,7 +572,7 @@ void NavEKF3_core::InitialiseVariables()
 #endif
 
     // initialise pre-arm message
-    dal.snprintf(prearm_fail_string, sizeof(prearm_fail_string), "EKF3 still initialising");
+    dal.snprintf(prearm_fail_string, sizeof(prearm_fail_string), "still initialising");
 
     InitialiseVariablesMag();
 
@@ -619,16 +629,11 @@ bool NavEKF3_core::InitialiseFilterBootstrap(void)
     // update sensor selection (for affinity)
     update_sensor_selection();
 
-    // If we are a plane and don't have GPS lock then don't initialise GPS-dependent lanes.
-    if (assume_zero_sideslip() &&
-        uses_any_gps_source() &&
-        dal.gps().status(preferred_gps) < AP_DAL_GPS::GPS_OK_FIX_3D) {
-        dal.snprintf(prearm_fail_string,
-                     sizeof(prearm_fail_string),
-                     "EKF3 init failure: No GPS lock");
-        statesInitialised = false;
-        return false;
-    }
+    // Upstream refuses to initialise a plane's GPS lane until it has a 3D fix. We do not:
+    // NavEKF3::InitialiseFilter() needs every core, so that would keep the whole filter, non-GPS
+    // lanes included, off until the GPS gets healthy. Started without a fix the lane runs in
+    // constant-position mode like a copter's would, stays ineligible as primary ("gps no
+    // origin"), and begins aiding once a fix passes the usual quality checks.
 
     // read all the sensors required to start the EKF the states
     readIMUData(false);  // don't allow prediction
@@ -714,7 +719,7 @@ bool NavEKF3_core::InitialiseFilterBootstrap(void)
         inactiveBias[i].accel_bias.zero();
     }
 
-    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 lane%u IMU%u initialised",(unsigned)core_index,(unsigned)imu_index);
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "L%u/%s: initialised",(unsigned)core_index,lane_label());
 
     // we initially return false to wait for the IMU buffer to fill
     return false;
@@ -876,7 +881,7 @@ void NavEKF3_core::UpdateFilter(bool predict)
         // controller slews out. Accepted: this reset is already loud (warning
         // above) and re-fanning origins across lanes was deliberately removed
         // (see "don't propagate gps origin").
-        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "EKF3 lane%u IMU%u forced reset",(unsigned)core_index,(unsigned)imu_index);
+        GCS_SEND_TEXT(MAV_SEVERITY_WARNING, "L%u/%s: forced reset",(unsigned)core_index,lane_label());
         last_filter_ok_ms = 0;
         statesInitialised = false;
         InitialiseFilterBootstrap();

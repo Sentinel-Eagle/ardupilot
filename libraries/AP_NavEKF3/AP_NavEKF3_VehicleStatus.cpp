@@ -90,7 +90,7 @@ void NavEKF3_core::calcGpsGoodToAlign(void)
     if (gpsVertVelFail) {
         dal.snprintf(prearm_fail_string,
                            sizeof(prearm_fail_string),
-                           "GPS vertical speed %.2fm/s (needs %.2f)", (double)fabsF(gpsVertVelFilt), (double)(0.3f*checkScaler));
+                           "GPS vert speed %.2f > %.2f", (double)fabsF(gpsVertVelFilt), (double)(0.3f*checkScaler));
         gpsCheckStatus.bad_vert_vel = true;
     } else {
         gpsCheckStatus.bad_vert_vel = false;
@@ -111,7 +111,7 @@ void NavEKF3_core::calcGpsGoodToAlign(void)
     if (gpsHorizVelFail) {
         dal.snprintf(prearm_fail_string,
                            sizeof(prearm_fail_string),
-                           "GPS horizontal speed %.2fm/s (needs %.2f)", (double)gpsDriftNE, (double)(0.3f*checkScaler));
+                           "GPS horiz speed %.2f > %.2f", (double)gpsDriftNE, (double)(0.3f*checkScaler));
         gpsCheckStatus.bad_horiz_vel = true;
     } else {
         gpsCheckStatus.bad_horiz_vel = false;
@@ -130,7 +130,7 @@ void NavEKF3_core::calcGpsGoodToAlign(void)
     if (hAccFail) {
         dal.snprintf(prearm_fail_string,
                            sizeof(prearm_fail_string),
-                           "GPS horiz error %.1fm (needs %.1f)", (double)hAcc, (double)(5.0f*checkScaler));
+                           "GPS horiz error %.1fm > %.1f", (double)hAcc, (double)(5.0f*checkScaler));
         gpsCheckStatus.bad_hAcc = true;
     } else {
         gpsCheckStatus.bad_hAcc = false;
@@ -147,7 +147,7 @@ void NavEKF3_core::calcGpsGoodToAlign(void)
     if (vAccFail) {
         dal.snprintf(prearm_fail_string,
                            sizeof(prearm_fail_string),
-                           "GPS vert error %.1fm (needs < %.1f)", (double)vAcc, (double)(7.5f * checkScaler));
+                           "GPS vert error %.1fm > %.1f", (double)vAcc, (double)(7.5f * checkScaler));
         gpsCheckStatus.bad_vAcc = true;
     } else {
         gpsCheckStatus.bad_vAcc = false;
@@ -160,7 +160,7 @@ void NavEKF3_core::calcGpsGoodToAlign(void)
     if (gpsSpdAccFail) {
         dal.snprintf(prearm_fail_string,
                            sizeof(prearm_fail_string),
-                           "GPS speed error %.1f (needs < %.1f)", (double)gpsSpdAccuracy, (double)(1.0f*checkScaler));
+                           "GPS speed error %.1f > %.1f", (double)gpsSpdAccuracy, (double)(1.0f*checkScaler));
         gpsCheckStatus.bad_sAcc = true;
     } else {
         gpsCheckStatus.bad_sAcc = false;
@@ -213,7 +213,7 @@ void NavEKF3_core::calcGpsGoodToAlign(void)
 
     // assume failed first time through and notify user checks have started
     if (lastGpsVelFail_ms == 0) {
-        dal.snprintf(prearm_fail_string, sizeof(prearm_fail_string), "EKF starting GPS checks");
+        dal.snprintf(prearm_fail_string, sizeof(prearm_fail_string), "starting GPS checks");
         lastGpsVelFail_ms = imuSampleTime_ms;
     }
 
